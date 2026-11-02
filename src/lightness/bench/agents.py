@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from lightness.bench import sandbox
 from lightness.bench.tasks import Task
 
 
@@ -78,7 +79,16 @@ class BareAgent:
                 "cost_tracking": "ignore_errors",
             }
         )
-        env = LocalEnvironment(cwd=str(ws), env=cfg["environment"]["env"] | bench_env(), timeout=120)
+        class SandboxedEnvironment(LocalEnvironment):
+            def execute(self, action: dict, cwd: str = "", *, timeout: int | None = None):
+                action = action | {"command": sandbox.wrap_shell(action.get("command", ""), log_dir)}
+                return super().execute(action, cwd, timeout=timeout)
+
+        env = SandboxedEnvironment(
+            cwd=str(ws),
+            env=cfg["environment"]["env"] | bench_env() | sandbox.sandbox_env(log_dir),
+            timeout=120,
+        )
         agent = DefaultAgent(model, env, **agent_cfg)
         start = time.time()
         try:

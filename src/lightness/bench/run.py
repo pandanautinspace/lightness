@@ -18,6 +18,7 @@ from pathlib import Path
 
 import typer
 
+from lightness.bench import sandbox
 from lightness.bench.agents import BareAgent, NullAgent, OracleAgent, bench_env
 from lightness.bench.tasks import REPO_ROOT, Task, all_task_ids, load_task
 
@@ -44,10 +45,12 @@ def verify(task: Task, ws: Path, run_dir: Path) -> dict:
     shutil.copytree(ws, vws)
     shutil.copytree(task.tests, vdir / "tests")
     report = vdir / "report.xml"
-    env = os.environ | bench_env() | {"BENCH_WORKSPACE": str(vws)}
+    # Hidden tests execute agent-written code, so they run sandboxed too.
+    env = os.environ | bench_env() | sandbox.sandbox_env(vdir) | {"BENCH_WORKSPACE": str(vws)}
     try:
         proc = subprocess.run(
-            [sys.executable, "-m", "pytest", "tests", "-q", "-p", "no:cacheprovider", f"--junitxml={report}"],
+            [*sandbox.sandbox_prefix(vdir),
+             sys.executable, "-m", "pytest", "tests", "-q", "-p", "no:cacheprovider", f"--junitxml={report}"],
             cwd=vdir, env=env, capture_output=True, text=True, timeout=task.verify_timeout_sec,
         )
         (vdir / "pytest.log").write_text(proc.stdout + proc.stderr)

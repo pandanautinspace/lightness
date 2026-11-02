@@ -1,0 +1,25 @@
+(version 1)
+; Sandbox for agent-issued commands and for hidden tests running agent-written code.
+; Writes only inside the run directory; network only to localhost; no reading credentials.
+(allow default)
+
+(deny file-write*)
+(allow file-write*
+  (subpath (param "RUN_DIR"))
+  (literal "/dev/null")
+  (literal "/dev/zero")
+  (literal "/dev/dtracehelper")
+  (regex #"^/dev/tty")
+  (regex #"^/dev/fd/"))
+
+; Outbound only to localhost (model server, apps under test). Binding/listening stays allowed.
+(deny network-outbound)
+(allow network-outbound (remote ip "localhost:*"))
+(allow network-outbound (remote unix-socket))
+
+(deny file-read*
+  (subpath (string-append (param "HOME") "/.ssh"))
+  (subpath (string-append (param "HOME") "/.aws"))
+  (subpath (string-append (param "HOME") "/.config/gh"))
+  (subpath (string-append (param "HOME") "/.gnupg"))
+  (subpath (string-append (param "HOME") "/Library/Keychains")))

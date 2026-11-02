@@ -1,0 +1,4 @@
+category = "repo-edit"
+difficulty = "medium"
+agent_timeout_sec = 2400
+verify_timeout_sec = 240

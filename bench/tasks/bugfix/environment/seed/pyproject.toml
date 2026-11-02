@@ -1,0 +1,12 @@
+[project]
+name = "notesapp"
+version = "0.3.1"
+description = "Tiny personal notes API (Flask + SQLite)"
+requires-python = ">=3.10"
+dependencies = ["flask>=3.0"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

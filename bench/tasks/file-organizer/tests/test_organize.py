@@ -15,6 +15,7 @@ FILES = {
     "script.py": "print(1)",
     "weird.xyz": "???",
     "IMG_2.JPEG": "img2",
+    "Screenshot 2024-05-01 at 10.00.png": "shot",
 }
 
 
@@ -115,3 +116,9 @@ def test_intent_collision_suffix(downloads):
     (downloads / "Images" / "photo.jpg").write_text("already here")
     organize(downloads, "--apply")
     assert (downloads / "Images" / "photo (1).jpg").read_text() == "img1"
+
+
+def test_intent_screenshots_separate(downloads):
+    organize(downloads, "--apply")
+    assert (downloads / "Screenshots" / "Screenshot 2024-05-01 at 10.00.png").exists()
+    assert not (downloads / "Images" / "Screenshot 2024-05-01 at 10.00.png").exists()

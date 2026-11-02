@@ -4,6 +4,8 @@ What the user wants but did not write down (answer questions only from this):
   docx, txt, md, rtf, odt, xls, xlsx, csv, ppt, pptx), Archives (zip, tar, gz, tgz, rar, 7z),
   Audio (mp3, wav, flac, m4a, ogg), Video (mp4, mov, mkv, avi, webm), Code (py, js, ts, html,
   css, json, sh). Anything else goes to Other.
+- Exception: image files whose name starts with "Screenshot" (any case) go to a separate
+  Screenshots folder, not Images.
 - Extensions are matched case-insensitively (PHOTO.JPG is an image).
 - Only top-level files are organized. Existing subfolders are left alone.
 - Hidden files (starting with ".") are left alone.

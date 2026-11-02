@@ -17,7 +17,10 @@ EXT_TO_CATEGORY = {ext: cat for cat, exts in CATEGORIES.items() for ext in exts.
 
 
 def category_for(path: Path) -> str:
-    return EXT_TO_CATEGORY.get(path.suffix.lower().lstrip("."), "Other")
+    category = EXT_TO_CATEGORY.get(path.suffix.lower().lstrip("."), "Other")
+    if category == "Images" and path.name.lower().startswith("screenshot"):
+        return "Screenshots"
+    return category
 
 
 def free_name(dest_dir: Path, name: str, taken: set[Path]) -> Path:

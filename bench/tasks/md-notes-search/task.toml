@@ -1,0 +1,4 @@
+category = "script"
+difficulty = "medium"
+agent_timeout_sec = 1800
+verify_timeout_sec = 120

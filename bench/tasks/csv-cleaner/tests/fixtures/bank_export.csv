@@ -1,0 +1,23 @@
+ DATE ,Description  ,AMOUNT,Balance
+
+2024-03-01,Opening deposit,"$2,000",2000.00
+03/14/2024,  Payroll   ACME Corp ,"$1,234.50",
+14.03.2024,Supermarkt REWE,"-12,00 €",
+"Mar 13, 2024",Electric bill,(87.25),
+
+2024/03/02,Coffee Shop,-4.50,
+2 Mar 2024,Bookstore,"($23.99)",
+03/14/2024,  Payroll   ACME Corp ,"$1,234.50",
+20.03.2024,Miete März,"-1.250,00 €",
+pending,Card authorization,"$5.00",
+03/25/2024,Refund Amazon,$15.00,
+2024-03-28,ATM withdrawal,"-$60.00",
+14.03.2024,Supermarkt REWE,"-12,00 €",
+30-Mar-2024,Gym membership,-29.99,
+,,,
+2024-03-28 ,  ATM  withdrawal,"-$60.00",
+04/03/2024,Parking garage,"-$8.00",
+2024-03-29,Mystery charge,n/a,
+2024-03-31,Interest, 0.42 ,
+05.03.2024,Erstattung Ärztin,"50,00 €",
+

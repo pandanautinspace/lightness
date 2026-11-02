@@ -1,7 +1,16 @@
 (version 1)
 ; Sandbox for agent-issued commands and for hidden tests running agent-written code.
-; Writes only inside the run directory; network only to localhost; no reading credentials.
+; Reads: nothing under $HOME except the run dir, the bench venv, and the lightness package
+;   (keeps hidden tests/solutions/other runs unreadable and avoids macOS privacy prompts).
+; Writes: only inside the run dir. Network: outbound only to localhost.
 (allow default)
+
+(deny file-read* (subpath (param "HOME")))
+(allow file-read-metadata)
+(allow file-read*
+  (subpath (param "RUN_DIR"))
+  (subpath (string-append (param "REPO") "/.venv"))
+  (subpath (string-append (param "REPO") "/src")))
 
 (deny file-write*)
 (allow file-write*
@@ -16,10 +25,3 @@
 (deny network-outbound)
 (allow network-outbound (remote ip "localhost:*"))
 (allow network-outbound (remote unix-socket))
-
-(deny file-read*
-  (subpath (string-append (param "HOME") "/.ssh"))
-  (subpath (string-append (param "HOME") "/.aws"))
-  (subpath (string-append (param "HOME") "/.config/gh"))
-  (subpath (string-append (param "HOME") "/.gnupg"))
-  (subpath (string-append (param "HOME") "/Library/Keychains")))

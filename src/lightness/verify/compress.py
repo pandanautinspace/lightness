@@ -84,3 +84,13 @@ def diagnostics_summary(diags: list[str], limit: int = 8) -> str:
             out.append(d)
     extra = f"\n... and {len(out) - limit} more" if len(out) > limit else ""
     return "\n".join(out[:limit]) + extra
+
+
+def shorten_paths(text: str, ws: Path, run_dir: Path | None = None) -> str:
+    """Replace absolute workspace/run paths with ./ and $TMP/ so the model sees what matters."""
+    for base, short in ((ws.resolve(), "./"), (ws, "./")):
+        text = text.replace(str(base) + "/", short).replace(str(base), ".")
+    if run_dir is not None:
+        for base in (run_dir.resolve() / "tmp", run_dir / "tmp", run_dir.resolve(), run_dir):
+            text = text.replace(str(base) + "/", "$TMP/").replace(str(base), "$TMP")
+    return text

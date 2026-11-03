@@ -87,3 +87,17 @@ def test_runs_inside_sandbox(ws):
     write(ws, "test_dates.py", "from dates import parse\n\n\ndef test_ok():\n    assert parse('x') == 'x'\n")
     r = verify(ws, [f], run_dir=run_dir)
     assert r.ok, r.observation()
+
+
+def test_package_tests_count_as_related(ws):
+    a = write(ws, "pkg/store.py", "X = 1\n")
+    write(ws, "pkg/__init__.py", "")
+    write(ws, "tests/test_app.py", "from pkg import store\n")
+    assert [t.name for t in related_tests([a], ws)] == ["test_app.py"]
+
+
+def test_suite_runs_when_nothing_is_related(ws):
+    f = write(ws, "core.py", "X = 1\n")
+    write(ws, "test_other.py", "def test_unrelated():\n    assert False\n")
+    r = verify(ws, [f])
+    assert r.failed is not None and r.failed.stage == "tests"

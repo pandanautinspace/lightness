@@ -51,8 +51,11 @@ Rules:
 - New projects: core logic first (pure functions, no I/O), then the user-facing shell (CLI / web
   routes / TUI) that the contract describes, then tests for the acceptance criteria that exercise
   the real program, then a final check against the whole spec.
-- Changes to existing code: at most 3 steps. Make the change in the existing code, add or extend a
-  test that proves it, then a final check. Don't restructure code the change doesn't need.
+- Bug reports: at most 3 steps. First write a test that reproduces the reported problem with the
+  existing code (it must fail), then fix the code so it passes, then a final check.
+- Feature changes to existing code: at most 3 steps. Make the change, add a test that proves it,
+  then a final check.
+- Never restructure, rename or change the return types of existing code the change doesn't need.
 - Keep modules small; separate logic from I/O so it can be tested directly.
 - files: the files each step creates or changes (relative paths). Test files are named test_*.py.
 - check: how we'll know the step worked (which tests pass, which command runs)."""

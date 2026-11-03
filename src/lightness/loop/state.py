@@ -41,6 +41,8 @@ class RunState:
     idle: int = 0  # consecutive look-only actions (read/search/test/probe/run) since the last write
     working: list[str] = field(default_factory=list)  # recently read FILE::SYMBOL, shown in full each turn
     last_change_turn: int = 0
+    seen: dict[str, str] = field(default_factory=dict)  # read target -> content digest when shown
+    failing_cache: tuple[int, list[str]] | None = None  # (last_change_turn, failing test ids) for revert
     green_since: int | None = None  # turn at which everything last passed with no change since
     finished: bool = False
     outcome: str = ""

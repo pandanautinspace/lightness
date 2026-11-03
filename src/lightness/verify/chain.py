@@ -127,6 +127,7 @@ def check_pyright(files: list[Path], ws: Path, run_dir: Path | None) -> Check:
 def related_tests(files: list[Path], ws: Path) -> list[Path]:
     """Test files in the workspace that import any of the touched modules (or are touched)."""
     modules = {f.stem for f in files} | {".".join(f.relative_to(ws).with_suffix("").parts) for f in files}
+    modules |= {f.relative_to(ws).parts[0] for f in files if len(f.relative_to(ws).parts) > 1}  # the package
     pattern = re.compile(r"^\s*(?:from|import)\s+(" + "|".join(re.escape(m) for m in modules) + r")\b", re.M)
     tests = []
     for t in sorted(ws.rglob("test_*.py")) + sorted(ws.rglob("*_test.py")):
@@ -149,6 +150,27 @@ def check_tests(tests: list[Path] | None, ws: Path, run_dir: Path | None, timeou
     return Check("tests", False, pytest_summary(proc.stdout + proc.stderr, ws))
 
 
+def failing_tests(ws: Path, run_dir: Path | None, timeout: int = 180) -> set[str] | None:
+    """Node ids of failing tests in the whole suite (empty = all pass); None if pytest couldn't run."""
+    proc = _run([str(BIN / "python"), "-m", "pytest", "-q", "-rfE", "-p", "no:cacheprovider"], ws, run_dir, timeout)
+    if proc.returncode in (0, 5):
+        return set()
+    failed = {line.split(" ", 2)[1] for line in proc.stdout.splitlines() if line.startswith(("FAILED ", "ERROR "))}
+    return failed or None
+
+
+def all_tests(ws: Path) -> list[Path]:
+    return [t for t in sorted(ws.rglob("test_*.py")) + sorted(ws.rglob("*_test.py")) if ".venv" not in t.parts]
+
+
+def _select_tests(py: list[Path], ws: Path, mode: str) -> list[Path] | None:
+    """None = whole suite. With no related tests but a suite present, run the suite (small repos)."""
+    if mode == "all":
+        return None
+    related = related_tests(py, ws)
+    return related if related or not all_tests(ws) else None
+
+
 def verify(
     ws: Path,
     touched: list[Path],
@@ -164,7 +186,7 @@ def verify(
         lambda: check_parse(py, ws),
         lambda: check_ruff(py, ws, run_dir) if py else Check("ruff", True),
         lambda: check_pyright(py, ws, run_dir) if py and types else Check("types", True),
-        lambda: check_tests(None if tests == "all" else related_tests(py, ws), ws, run_dir, test_timeout)
+        lambda: check_tests(_select_tests(py, ws, tests), ws, run_dir, test_timeout)
         if tests != "none" else Check("tests", True),
     ):
         c = check()

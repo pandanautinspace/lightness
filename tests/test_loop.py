@@ -137,3 +137,13 @@ def test_step_turn_budget_forces_revision(ws):
     st = h.setup("make a greeter")
     st.current.turns = 16
     assert set(h.menu(st)) <= {"revise_plan", "ask_user"}
+
+
+def test_edit_that_breaks_passing_tests_is_reverted(ws):
+    st, _ = run(ws, [("write_file", "greet.py"), ("done_step", ""), ("write_file", "test_greet.py"),
+                     ("edit_symbol", "greet.py::greet")],
+                {"greet.py": [GREET, "def greet(name):\n    return 'nope'\n"], "test_greet.py": [TEST]})
+    last = st.observations[-1]
+    assert not last.ok and "edit reverted" in last.text and "test_greet" in last.text
+    assert "Hi {name}" in (ws / "greet.py").read_text()
+    assert str(ws) not in last.text  # paths shortened

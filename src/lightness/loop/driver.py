@@ -17,8 +17,8 @@ from lightness.loop.state import RunState, Step
 from lightness.provider import Client, DecisionError
 from lightness.spec.workshop import load_catalog, run_workshop
 from lightness.user import UserChannel
-from lightness.verify.chain import BIN, check_tests, verify
-from lightness.verify.compress import traceback_summary
+from lightness.verify.chain import BIN, all_tests, check_tests, failing_tests, verify
+from lightness.verify.compress import shorten_paths, traceback_summary
 from lightness.verify.probes import PROBE_SCHEMA, run_probes, summarize
 from lightness.verify.testlint import lint_tests
 
@@ -110,10 +110,12 @@ class Harness:
         m: dict[str, dict] = {}
         if st.green_since is not None and st.turn - st.green_since >= 2:
             return {"done": {"const": ""}}
-        if files:
-            m["read"] = {"enum": files}
-        if syms:
-            m["read_symbol"] = {"enum": syms}
+        unseen_files = [f for f in files if st.seen.get(f) != self._digest(f)]
+        unseen_syms = [x for x in syms if x not in st.working or st.seen.get(x) != self._digest(x.split("::")[0])]
+        if unseen_files:
+            m["read"] = {"enum": unseen_files}
+        if unseen_syms:
+            m["read_symbol"] = {"enum": unseen_syms}
         m["search"] = string
         m["write_file"] = {"type": "string", "pattern": PATH_RE}
         if syms:
@@ -186,6 +188,7 @@ class Harness:
         st.idle = st.idle + 1 if action in LOOK_ONLY else 0
         handler = getattr(self, f"do_{action}")
         ok, text = handler(st, target)
+        text = shorten_paths(text, self.ws, self.run_dir)
         st.observe(action, target, ok, text)
         self.after(st, action, ok, text)
         self.save(st)
@@ -201,6 +204,11 @@ class Harness:
 
     # --- actions ------------------------------------------------------------------------------
 
+    def _digest(self, rel: str) -> str:
+        import hashlib
+        p = self.ws / rel
+        return hashlib.sha1(p.read_bytes()).hexdigest()[:12] if p.is_file() else ""
+
     def _mark_read(self, st: RunState, f: str) -> None:
         if f not in st.files_read:
             st.files_read.append(f)
@@ -210,6 +218,7 @@ class Harness:
         if not p.is_file():
             return False, f"{target} does not exist"
         self._mark_read(st, target)
+        st.seen[target] = self._digest(target)
         return True, prompts._outline_or_body(p)[:6000]
 
     def do_read_symbol(self, st, target):
@@ -219,6 +228,7 @@ class Harness:
         except (SymbolError, OSError) as e:
             return False, str(e)
         st.working = [w for w in st.working if w != target][-2:] + [target]
+        st.seen[target] = self._digest(f)
         return True, f"(now shown in full under 'Working set' every turn)\n{body}"[:4000]
 
     def do_search(self, st, target):
@@ -249,12 +259,29 @@ class Harness:
             problems = lint_tests(new_text, modules)
             if problems:
                 return False, "test file rejected (not written):\n" + "\n".join(f"- {x}" for x in problems)
+        old_text = p.read_text() if p.exists() else None
+        guard = old_text is not None and not Path(rel).name.startswith("test_") and bool(all_tests(self.ws))
+        before = self._failing(st) if guard else None
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(new_text)
         self._mark_read(st, rel)
         st.last_change_turn, st.green_since = st.turn, None
         result = verify(self.ws, [p], run_dir=self.run_dir)
+        if before is not None and result.failed is not None and result.failed.stage == "tests":
+            after = failing_tests(self.ws, self.run_dir)
+            broken = sorted(after - before) if after is not None else ["(test collection)"]
+            if broken:  # never make things worse: undo edits that break tests that passed before
+                p.write_text(old_text)
+                return False, ("edit reverted: it broke tests that passed before: " + ", ".join(broken[:5])
+                               + "\n" + result.observation())
+        st.failing_cache = None
         return result.ok, result.observation()
+
+    def _failing(self, st) -> set[str] | None:
+        """Failing tests right now, cached until the next file change."""
+        if st.failing_cache is None or st.failing_cache[0] != st.last_change_turn:
+            st.failing_cache = (st.last_change_turn, sorted(failing_tests(self.ws, self.run_dir) or []))
+        return set(st.failing_cache[1])
 
     def do_write_file(self, st, target):
         p = self.ws / target

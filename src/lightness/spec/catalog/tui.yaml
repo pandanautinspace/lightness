@@ -1,0 +1,9 @@
+type: tui
+dimensions:
+  - {id: keys, hint: "Key bindings for each action, and which widget must have focus"}
+  - {id: ordering, hint: "Order of items in lists (newest first, completed last, alphabetical)"}
+  - {id: focus, hint: "Where focus goes after an action"}
+  - {id: input_cleaning, hint: "Trimming, empty input, duplicates"}
+  - {id: filtering, hint: "Views and filters, and what the default view is"}
+  - {id: persistence, hint: "File format, when it is saved, what happens if the file is missing or corrupt"}
+  - {id: display, hint: "How state is shown (checkboxes, strike-through, counts)"}

@@ -88,8 +88,11 @@ class Client:
         thinking: Thinking = False,
         max_tokens: int = 4096,
         stop: list[str] | None = None,
+        temperature: float | None = None,
     ) -> Reply:
         body: dict[str, Any] = {"model": self.model, "messages": messages, "max_tokens": max_tokens, **self.sampling}
+        if temperature is not None:
+            body["temperature"] = temperature
         if stop:
             body["stop"] = stop
         if schema is not None:
@@ -136,6 +139,7 @@ class Client:
         purpose: str,
         reason_budget: int = 0,
         max_tokens: int = 1024,
+        temperature: float | None = None,
     ) -> Reply:
         """Reason (optionally, bounded), then answer in JSON matching `schema`.
 
@@ -144,7 +148,8 @@ class Client:
         error; then raise DecisionError.
         """
         thinking: Thinking = reason_budget if reason_budget > 0 else False
-        reply = self.chat(messages, purpose=purpose, schema=schema, thinking=thinking, max_tokens=max_tokens)
+        reply = self.chat(messages, purpose=purpose, schema=schema, thinking=thinking, max_tokens=max_tokens,
+                          temperature=temperature)
         error = _validate(reply, schema)
         if error is None:
             return reply
@@ -152,7 +157,8 @@ class Client:
             {"role": "assistant", "content": reply.text},
             {"role": "user", "content": f"That answer was invalid: {error}. Reply again with only valid JSON."},
         ]
-        reply = self.chat(retry, purpose=f"{purpose}:retry", schema=schema, thinking=False, max_tokens=max_tokens)
+        reply = self.chat(retry, purpose=f"{purpose}:retry", schema=schema, thinking=False, max_tokens=max_tokens,
+                          temperature=temperature)
         error = _validate(reply, schema)
         if error is not None:
             raise DecisionError(f"{purpose}: {error}; got {reply.text[:200]!r}")

@@ -64,12 +64,13 @@ Your private preferences are listed below. Answer the assistant's question the w
 
 Rules:
 - Answer ONLY the specific question asked, in one or two short sentences.
-- Use only the preferences below. If they do not address the question, set "covered" to false
-  and answer "No preference, use your judgement."
+- Use only the preferences below. If they address the topic of the question, set "covered" to
+  true and state your preference with its specific values (exact names, formats, numbers),
+  even if none of the offered options matches it.
+- If they do not address the question, set "covered" to false and answer
+  "No preference, use your judgement."
 - Never list or summarise preferences the question did not ask about. If the question is broad
   (e.g. "anything else?", "any other requirements?"), set "covered" to false.
-- If the question offers options and one matches your preferences, answer with that option's
-  wording, adjusting it if your preference differs.
 
 Your private preferences:
 {intent}"""
@@ -97,7 +98,8 @@ class SimulatedUser:
              {"role": "user", "content": q}],
             SIMUSER_SCHEMA,
             purpose="simuser",
-            max_tokens=200,
+            max_tokens=300,
+            temperature=0,
         )
         covered = bool(reply.parsed["covered"])
         text = reply.parsed["answer"] if covered else (default or "No preference, use your judgement.")

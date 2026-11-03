@@ -1,0 +1,9 @@
+type: repo-change
+dimensions:
+  - {id: scope, hint: "Exactly which behaviour changes and what must stay the same"}
+  - {id: output_format, hint: "Exact shape of new output: columns and order, field names, separators, date format, encoding"}
+  - {id: selection, hint: "Which records are included (filters, empty filter meaning all, pagination or not)"}
+  - {id: matching, hint: "Case sensitivity and exact vs partial matching"}
+  - {id: ordering, hint: "Order of results"}
+  - {id: edge_cases, hint: "Empty data, unknown values, very large inputs"}
+  - {id: interfaces, hint: "Where the change is exposed (API route, CLI command, function) and naming"}

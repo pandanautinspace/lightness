@@ -1,0 +1,13 @@
+type: data-script
+dimensions:
+  - {id: input_variants, hint: "Which input formats and variants must be accepted (delimiters, encodings, header names)"}
+  - {id: ambiguous_values, hint: "How to read ambiguous values: dates like 04/03, decimal commas, negative amounts"}
+  - {id: normalisation, hint: "How text is cleaned: trimming, collapsing spaces, case"}
+  - {id: duplicates, hint: "What counts as a duplicate and which copy is kept"}
+  - {id: invalid_rows, hint: "Rows that can't be parsed: skip, report, or fail"}
+  - {id: inclusion_rules, hint: "Which records count toward results (statuses, cancelled/refunded items, filters)"}
+  - {id: calculations, hint: "How totals and metrics are computed (what's included, discounts, rounding)"}
+  - {id: ranking, hint: "What 'top' or 'best' is ranked by, and tie-breaking"}
+  - {id: output_format, hint: "Output columns, order, number formatting, sorting of rows"}
+  - {id: reruns, hint: "Re-running on the same or overlapping input: append, replace, or deduplicate"}
+  - {id: special_cases, hint: "Particular records or values that need different handling from the general rule"}

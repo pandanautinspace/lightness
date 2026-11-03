@@ -1,0 +1,12 @@
+# Dimensions worth clarifying for command-line tools. Generic, not task-specific.
+type: cli
+dimensions:
+  - {id: naming, hint: "Names the user will see: categories, folders, labels, output fields"}
+  - {id: scope, hint: "What is in or out: recursion into subfolders, hidden files, file types, limits"}
+  - {id: safety, hint: "Dry-run default, confirmation, overwrite vs rename on collision, undo"}
+  - {id: matching, hint: "Case sensitivity, exact vs partial match, how multiple conditions combine (AND/OR)"}
+  - {id: ordering, hint: "Sort order of output and results"}
+  - {id: output_format, hint: "Human text vs JSON, fields included, number and date formatting"}
+  - {id: errors, hint: "What happens on bad input or missing files: skip, warn, or fail; exit codes"}
+  - {id: idempotency, hint: "What a second run on the same data should do"}
+  - {id: special_cases, hint: "Particular names or kinds of input that should be handled differently from the general rule"}

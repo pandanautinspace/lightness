@@ -1,0 +1,10 @@
+type: webapp
+dimensions:
+  - {id: fields, hint: "What each record holds, which fields are required, and validation rules"}
+  - {id: fixed_values, hint: "Fixed lists (categories, statuses) vs free text"}
+  - {id: display_format, hint: "How money, dates and numbers are shown (currency, decimals, locale)"}
+  - {id: ordering, hint: "Default sort order of lists"}
+  - {id: filtering, hint: "Which filters and summaries exist and how they combine"}
+  - {id: persistence, hint: "Where data lives and what survives a restart"}
+  - {id: auth, hint: "Single user without login, or accounts"}
+  - {id: errors, hint: "What the user sees on invalid input; API error format and status codes"}

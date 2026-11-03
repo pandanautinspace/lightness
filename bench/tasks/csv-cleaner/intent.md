@@ -7,8 +7,11 @@ What the user wants but did not write down (answer questions only from this):
 - Amounts are always written with exactly two decimals (`2000.00`, `-4.50`).
 - Amounts in parentheses are negative. In "€" amounts the comma is the decimal separator and
   "." groups thousands (`-1.250,00 €`); in "$" or bare amounts it's the other way round.
-- Descriptions: trim and collapse runs of spaces, keep the original case and accents.
-- A duplicate is a row with the same date, description and amount after cleaning; keep the
-  first one.
+- Descriptions: trim leading/trailing spaces and collapse every internal run of spaces to a
+  single space (`"  Payroll   ACME Corp "` becomes `"Payroll ACME Corp"`); keep the original
+  case and accents.
+- A duplicate is a row with the same date, description and amount after cleaning (so after the
+  space collapsing above: `Corner  Store` and `Corner Store` on the same day with the same
+  amount are duplicates); keep the first one.
 - Rows whose date or amount can't be understood are skipped and counted, not a crash.
 - Money in / money out in the summary: total of positive amounts and total of negative amounts.

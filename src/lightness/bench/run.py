@@ -95,18 +95,20 @@ def main(
     agent: str = typer.Option("oracle", help="oracle | null | bare | bare-ask | lightness | lightness-auto"),
     model: str = typer.Option(None, help="key in models.toml"),
     tasks: str = typer.Option("all", help="comma-separated task ids, or 'all'"),
+    suite: str = typer.Option("tasks", help="task folder under bench/: tasks (main benchmark), kit-tui, ..."),
     runs: int = typer.Option(1, help="runs per task"),
     out: Path = typer.Option(REPO_ROOT / "runs"),
 ):
-    task_ids = all_task_ids() if tasks == "all" else tasks.split(",")
+    task_ids = all_task_ids(suite) if tasks == "all" else tasks.split(",")
     agent_obj = make_agent(agent, model)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    batch_dir = out / f"{stamp}-{agent_obj.name}-{model or 'none'}-{os.getpid()}"
+    prefix = "" if suite == "tasks" else f"{suite}-"
+    batch_dir = out / f"{prefix}{stamp}-{agent_obj.name}-{model or 'none'}-{os.getpid()}"
     batch_dir.mkdir(parents=True)
     results_path = batch_dir / "results.jsonl"
 
     for tid in task_ids:
-        task = load_task(tid)
+        task = load_task(tid, suite)
         for i in range(runs):
             run_dir = batch_dir / tid / str(i)
             ws = run_dir / "workspace"

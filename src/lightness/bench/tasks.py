@@ -1,4 +1,4 @@
-"""Loading benchmark tasks from bench/tasks/<id>/."""
+"""Loading benchmark tasks from bench/<suite>/<id>/ (suite "tasks" is the main benchmark)."""
 
 import tomllib
 from dataclasses import dataclass
@@ -39,8 +39,12 @@ class Task:
         return self.path / "solution"
 
 
-def load_task(task_id: str) -> Task:
-    path = TASKS_DIR / task_id
+def suite_dir(suite: str = "tasks") -> Path:
+    return REPO_ROOT / "bench" / suite
+
+
+def load_task(task_id: str, suite: str = "tasks") -> Task:
+    path = suite_dir(suite) / task_id
     meta = tomllib.loads((path / "task.toml").read_text())
     return Task(
         id=task_id,
@@ -52,5 +56,5 @@ def load_task(task_id: str) -> Task:
     )
 
 
-def all_task_ids() -> list[str]:
-    return sorted(p.name for p in TASKS_DIR.iterdir() if (p / "task.toml").exists())
+def all_task_ids(suite: str = "tasks") -> list[str]:
+    return sorted(p.name for p in suite_dir(suite).iterdir() if (p / "task.toml").exists())

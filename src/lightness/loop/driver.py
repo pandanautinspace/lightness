@@ -382,6 +382,9 @@ class Harness:
         return True, "plan revised:\n" + "\n".join(f"{s.id}. {s.goal}" for s in st.plan if s.status == "todo")
 
     def _full_check(self, st) -> tuple[bool, str]:
+        if st.spec and st.spec.features and not all_tests(self.ws):
+            return False, ("there are no tests yet. Write a test file (test_*.py) that checks the acceptance "
+                           "criteria with exact expected values before finishing.")
         c = check_tests(None, self.ws, self.run_dir, 180)
         if not c.ok:
             return False, c.summary

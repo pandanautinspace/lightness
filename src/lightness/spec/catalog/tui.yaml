@@ -7,3 +7,19 @@ dimensions:
   - {id: filtering, hint: "Views and filters, and what the default view is"}
   - {id: persistence, hint: "File format, when it is saved, what happens if the file is missing or corrupt"}
   - {id: display, hint: "How state is shown (checkboxes, strike-through, counts)"}
+test_fixture: |
+  # Drive the real app headlessly with Textual's pilot. Never mock the app or its widgets.
+  # Create a NEW app instance for every test; an app can't be run twice.
+  import asyncio, json
+  from notes_tui import NotesApp   # adjust to the project's module and class
+
+  def test_example(tmp_path):
+      path = tmp_path / "data.json"
+      async def go():
+          app = NotesApp(str(path))
+          async with app.run_test() as pilot:
+              await pilot.click("#new-note")
+              await pilot.press(*"hello", "enter")
+              await pilot.pause()
+      asyncio.run(go())
+      assert json.loads(path.read_text())[0]["text"] == "hello"

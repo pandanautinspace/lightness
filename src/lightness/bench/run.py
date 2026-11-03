@@ -19,7 +19,7 @@ from pathlib import Path
 import typer
 
 from lightness.bench import sandbox
-from lightness.bench.agents import BareAgent, NullAgent, OracleAgent, bench_env
+from lightness.bench.agents import BareAgent, LightnessAgent, NullAgent, OracleAgent, bench_env
 from lightness.bench.tasks import REPO_ROOT, Task, all_task_ids, load_task
 
 app = typer.Typer(add_completion=False)
@@ -37,6 +37,10 @@ def make_agent(name: str, model: str | None):
         return BareAgent(models[model])
     if name == "bare-ask":
         return BareAgent(models[model], ask=True)
+    if name == "lightness":
+        return LightnessAgent(models[model], model)
+    if name == "lightness-auto":
+        return LightnessAgent(models[model], model, user="defaults")
     raise typer.BadParameter(f"unknown agent {name}")
 
 
@@ -81,7 +85,7 @@ def verify(task: Task, ws: Path, run_dir: Path) -> dict:
 
 @app.command()
 def main(
-    agent: str = typer.Option("oracle", help="oracle | null | bare | bare-ask"),
+    agent: str = typer.Option("oracle", help="oracle | null | bare | bare-ask | lightness | lightness-auto"),
     model: str = typer.Option(None, help="key in models.toml"),
     tasks: str = typer.Option("all", help="comma-separated task ids, or 'all'"),
     runs: int = typer.Option(1, help="runs per task"),

@@ -8,3 +8,18 @@ dimensions:
   - {id: persistence, hint: "Where data lives and what survives a restart"}
   - {id: auth, hint: "Single user without login, or accounts"}
   - {id: errors, hint: "What the user sees on invalid input; API error format and status codes"}
+test_fixture: |
+  # Use the Flask test client against a temporary database; no real server needed.
+  import pytest
+  from app import create_app   # adjust to the project's app factory
+
+  @pytest.fixture
+  def client(tmp_path):
+      app = create_app(str(tmp_path / "test.db"))
+      app.config["TESTING"] = True
+      return app.test_client()
+
+  def test_example(client):
+      r = client.post("/api/items", json={"name": "x"})
+      assert r.status_code == 201
+      assert client.get("/api/items").get_json()[0]["name"] == "x"   # check content, not just status

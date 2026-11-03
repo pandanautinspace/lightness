@@ -10,3 +10,18 @@ dimensions:
   - {id: errors, hint: "What happens on bad input or missing files: skip, warn, or fail; exit codes"}
   - {id: idempotency, hint: "What a second run on the same data should do"}
   - {id: special_cases, hint: "Particular names or kinds of input that should be handled differently from the general rule"}
+test_fixture: |
+  # Run the program the way a user would, on files created in pytest's tmp_path.
+  import json, subprocess, sys
+  from pathlib import Path
+
+  def run(*args, cwd=None):
+      r = subprocess.run([sys.executable, *args], capture_output=True, text=True, cwd=cwd, timeout=60)
+      return r
+
+  def test_example(tmp_path: Path):
+      (tmp_path / "input.txt").write_text("...")
+      r = run("tool.py", str(tmp_path), "--json")
+      assert r.returncode == 0, r.stderr
+      data = json.loads(r.stdout)
+      assert data == [...]          # assert exact expected content, not just that it exists

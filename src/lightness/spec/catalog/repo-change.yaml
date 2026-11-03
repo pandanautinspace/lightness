@@ -7,3 +7,6 @@ dimensions:
   - {id: ordering, hint: "Order of results"}
   - {id: edge_cases, hint: "Empty data, unknown values, very large inputs"}
   - {id: interfaces, hint: "Where the change is exposed (API route, CLI command, function) and naming"}
+test_fixture: |
+  # Follow the conventions of the repo's existing tests (fixtures in conftest.py, test client).
+  # Assert exact expected content, not just status codes or that something exists.

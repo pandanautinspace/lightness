@@ -152,3 +152,40 @@ def answer_ask_user(command: str, user: SimulatedUser, max_questions: int) -> st
     if not question:
         return 'Usage: ask_user "your question"'
     return user.ask(question).text
+
+
+class LightnessAgent:
+    """The lightness harness: workshop → probes → plan → guarded loop."""
+
+    def __init__(self, model: dict, model_name: str, *, user: str = "sim", max_turns: int = 60):
+        self.model, self.model_name, self.user_kind, self.max_turns = model, model_name, user, max_turns
+        self.name = "lightness" if user == "sim" else "lightness-auto"
+
+    def run(self, task: Task, ws: Path, log_dir: Path) -> AgentResult:
+        import json
+
+        from lightness.loop.driver import Harness
+        from lightness.user import DefaultsUser
+
+        calls = log_dir / "calls.jsonl"
+        client = Client.from_registry(self.model_name, log_path=calls)
+        user = SimulatedUser(client, task.intent) if self.user_kind == "sim" else DefaultsUser()
+        harness = Harness(client, ws, user, run_dir=log_dir, max_turns=self.max_turns,
+                          wall_limit=task.agent_timeout_sec, state_path=log_dir / "state.json")
+        start = time.time()
+        try:
+            st = harness.run(task.instruction)
+            status = st.outcome or "unfinished"
+        except Exception as e:  # keep the run; the verifier still grades whatever was written
+            import traceback
+            (log_dir / "crash.txt").write_text(traceback.format_exc())
+            status = f"Crashed:{type(e).__name__}"
+        res = AgentResult(status, time.time() - start)
+        rows = [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []
+        agent_rows = [r for r in rows if r["purpose"] not in ("simuser",)]
+        res.model_calls = len(agent_rows)
+        res.prompt_tokens = sum(r.get("prompt_tokens") or 0 for r in agent_rows)
+        res.completion_tokens = sum(r.get("completion_tokens") or 0 for r in agent_rows)
+        res.format_errors = sum(1 for r in agent_rows if r["purpose"].endswith(":retry"))
+        res.extra["questions"] = [{"q": e.question, "a": e.answer.text, "covered": e.answer.covered} for e in user.log]
+        return res

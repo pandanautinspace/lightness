@@ -11,3 +11,18 @@ dimensions:
   - {id: output_format, hint: "Output columns, order, number formatting, sorting of rows"}
   - {id: reruns, hint: "Re-running on the same or overlapping input: append, replace, or deduplicate"}
   - {id: special_cases, hint: "Particular records or values that need different handling from the general rule"}
+test_fixture: |
+  # Run the program the way a user would, on files created in pytest's tmp_path.
+  import json, subprocess, sys
+  from pathlib import Path
+
+  def run(*args, cwd=None):
+      r = subprocess.run([sys.executable, *args], capture_output=True, text=True, cwd=cwd, timeout=60)
+      return r
+
+  def test_example(tmp_path: Path):
+      (tmp_path / "input.txt").write_text("...")
+      r = run("tool.py", str(tmp_path), "--json")
+      assert r.returncode == 0, r.stderr
+      data = json.loads(r.stdout)
+      assert data == [...]          # assert exact expected content, not just that it exists

@@ -39,6 +39,7 @@ class Check:
     stage: str
     ok: bool
     summary: str = ""
+    items: list[str] = field(default_factory=list)  # individual diagnostics, "file:line: message"
 
 
 @dataclass
@@ -80,7 +81,8 @@ def check_parse(files: list[Path], ws: Path) -> Check:
         except SyntaxError as e:
             line = (e.text or "").rstrip()
             caret = " " * max((e.offset or 1) - 1, 0) + "^"
-            return Check("parse", False, f"{f.relative_to(ws)}:{e.lineno}: {e.msg}\n    {line}\n    {caret}")
+            where = f"{f.relative_to(ws)}:{e.lineno}: {e.msg}"
+            return Check("parse", False, f"{where}\n    {line}\n    {caret}", [where])
     return Check("parse", True)
 
 
@@ -100,7 +102,7 @@ def check_ruff(files: list[Path], ws: Path, run_dir: Path | None) -> Check:
         return Check("ruff", True)
     lines = [f"{Path(d['filename']).relative_to(ws.resolve())}:{d['location']['row']}: {d['code']} {d['message']}"
              for d in bad]
-    return Check("ruff", False, diagnostics_summary(lines))
+    return Check("ruff", False, diagnostics_summary(lines), lines)
 
 
 def check_pyright(files: list[Path], ws: Path, run_dir: Path | None) -> Check:
@@ -121,7 +123,17 @@ def check_pyright(files: list[Path], ws: Path, run_dir: Path | None) -> Check:
         return Check("types", True)
     lines = [f"{Path(d['file']).relative_to(ws.resolve())}:{d['range']['start']['line'] + 1}: {d['message'].splitlines()[0]}"
              for d in errors]
-    return Check("types", False, diagnostics_summary(lines))
+    return Check("types", False, diagnostics_summary(lines), lines)
+
+
+def static_problems(files: list[Path], ws: Path, run_dir: Path | None) -> set[str]:
+    """Static diagnostics (parse/ruff/types) with line numbers dropped, for before/after comparison."""
+    py = [f for f in files if f.suffix == ".py" and f.exists()]
+    for check in (lambda: check_parse(py, ws), lambda: check_ruff(py, ws, run_dir), lambda: check_pyright(py, ws, run_dir)):
+        c = check()
+        if not c.ok:
+            return {re.sub(r":\d+:", ":", x) for x in c.items}
+    return set()
 
 
 def related_tests(files: list[Path], ws: Path) -> list[Path]:

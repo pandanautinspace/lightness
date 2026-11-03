@@ -120,7 +120,7 @@ def test_context_has_spec_plan_and_recent_results(ws):
 
 def test_idle_streak_removes_look_only_actions(ws):
     client = ScriptedClient([("write_file", "greet.py"), ("read", "greet.py"), ("search", "Hi"),
-                             ("read_symbol", "greet.py::greet")], {"greet.py": [GREET]})
+                             ("search", "name")], {"greet.py": [GREET]})
     h = Harness(client, ws, DefaultsUser(), run_dir=ws.parent)
     st = h.setup("make a greeter")
     for _ in range(4):
@@ -128,7 +128,14 @@ def test_idle_streak_removes_look_only_actions(ws):
     menu = h.menu(st)
     assert st.idle == 3 and not {"read", "read_symbol", "search", "test", "probe", "run"} & set(menu)
     assert "edit_symbol" in menu and "write_file" in menu
-    assert st.working == ["greet.py::greet"]
+
+
+def test_no_symbol_reads_for_files_shown_in_full(ws):
+    client = ScriptedClient([("write_file", "greet.py")], {"greet.py": [GREET]})
+    h = Harness(client, ws, DefaultsUser(), run_dir=ws.parent)
+    st = h.setup("make a greeter")
+    h.turn(st)
+    assert "greet.py" in st.current.files and "read_symbol" not in h.menu(st)
 
 
 def test_step_turn_budget_forces_revision(ws):
@@ -155,6 +162,16 @@ def test_edit_failing_static_checks_is_not_applied(ws):
     last = st.observations[-1]
     assert not last.ok and "edit not applied" in last.text and "F821" in last.text
     assert "Hi {name}" in (ws / "greet.py").read_text()
+
+
+def test_edit_keeping_earlier_problems_is_applied(ws):
+    broken = GREET + "\n\ndef shout(name):\n    return missing_helper(name)\n"
+    st, _ = run(ws, [("write_file", "greet.py"), ("edit_symbol", "greet.py::greet")],
+                {"greet.py": [broken, "def greet(name):\n    return f'Hey {name}'\n"]})
+    last = st.observations[-1]
+    assert "Hey {name}" in (ws / "greet.py").read_text()
+    assert "problems from before" in last.text and "(in `shout`)" in last.text
+    assert "greet.py::greet" in st.working
 
 
 def test_reproduce_step_must_fail(ws):

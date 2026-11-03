@@ -99,6 +99,15 @@ def _outline_or_body(path: Path, max_lines: int = 150) -> str:
     return text
 
 
+def shown_in_full(st: RunState, ws: Path) -> set[str]:
+    """Step files the turn prompt shows with full bodies (not outlines)."""
+    step = st.current
+    if not step:
+        return set()
+    return {f for f in step.files if (ws / f).is_file() and f in st.files_read
+            and not _outline_or_body(ws / f).startswith("(outline")}
+
+
 def turn_prompt(st: RunState, ws: Path, menu_doc: str) -> str:
     step = st.current
     parts = [ENVIRONMENT, "", spec_digest(st.spec) if st.spec else f"Task:\n{st.task}"]

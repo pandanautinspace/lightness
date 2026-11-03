@@ -4,6 +4,7 @@ workshop → probes → plan → turns (context rebuilt from state; constrained 
 runs as a macro with verification) → done only when tests and contract probes pass.
 """
 
+import ast
 import re
 import subprocess
 import time
@@ -17,7 +18,8 @@ from lightness.loop.state import RunState, Step
 from lightness.provider import Client, DecisionError
 from lightness.spec.workshop import load_catalog, run_workshop
 from lightness.user import UserChannel
-from lightness.verify.chain import BIN, all_tests, check_tests, failing_tests, verify
+from lightness.verify.chain import (BIN, VerifyResult, _select_tests, all_tests, check_tests, failing_tests,
+                                     static_problems, verify)
 from lightness.verify.compress import shorten_paths, traceback_summary
 from lightness.verify.probes import PROBE_SCHEMA, run_probes, summarize
 from lightness.verify.testlint import lint_tests
@@ -25,6 +27,24 @@ from lightness.verify.testlint import lint_tests
 LOOK_ONLY = {"read", "read_symbol", "search", "test", "probe", "run"}
 MAX_IDLE = 3  # look-only actions in a row before only acting is allowed
 STEP_TURNS = 15  # turns on one step before a plan revision is forced
+
+def _locate(item: str, text: str) -> str:
+    """'f.py:12: msg' → 'f.py:12: msg (in `name`)' so the model knows which symbol to edit."""
+    m = re.match(r"^[^:]+:(\d+):", item)
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return item
+    if not m:
+        return item
+    line, best = int(m[1]), None
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and \
+                node.lineno <= line <= (node.end_lineno or node.lineno):
+            if best is None or node.lineno > best.lineno:
+                best = node
+    return f"{item} (in `{best.name}`)" if best else f"{item} (module level)"
+
 
 PATH_RE = r"^[A-Za-z0-9_][A-Za-z0-9_./-]*\.(py|txt|md|json|toml|csv|html|css|js|cfg|ini|yaml|yml)$"
 
@@ -54,7 +74,7 @@ def list_symbols_safe(source: str) -> list[str]:
 
 class Harness:
     def __init__(self, client: Client, ws: Path, user: UserChannel, *, run_dir: Path | None = None,
-                 max_turns: int = 60, wall_limit: float = 1800, max_questions: int = 5, state_path: Path | None = None):
+                 max_turns: int = 100, wall_limit: float = 1800, max_questions: int = 5, state_path: Path | None = None):
         self.client, self.ws, self.user, self.run_dir = client, ws, user, run_dir
         self.max_turns, self.wall_limit, self.max_questions = max_turns, wall_limit, max_questions
         self.state_path = state_path
@@ -111,7 +131,9 @@ class Harness:
         if st.green_since is not None and st.turn - st.green_since >= 2:
             return {"done": {"const": ""}}
         unseen_files = [f for f in files if st.seen.get(f) != self._digest(f)]
-        unseen_syms = [x for x in syms if x not in st.working or st.seen.get(x) != self._digest(x.split("::")[0])]
+        shown = prompts.shown_in_full(st, self.ws)  # step files already in the prompt need no symbol reads
+        unseen_syms = [x for x in syms if x.split("::")[0] not in shown
+                       and (x not in st.working or st.seen.get(x) != self._digest(x.split("::")[0]))]
         if unseen_files:
             m["read"] = {"enum": unseen_files}
         if unseen_syms:
@@ -270,10 +292,20 @@ class Harness:
         p.write_text(new_text)
         self._mark_read(st, rel)
         st.last_change_turn, st.green_since = st.turn, None
-        result = verify(self.ws, [p], run_dir=self.run_dir)
+        result, note = verify(self.ws, [p], run_dir=self.run_dir), ""
         if old_text is not None and result.failed is not None and result.failed.stage in ("parse", "ruff", "types"):
-            p.write_text(old_text)  # edits that don't pass static checks are not applied (SWE-agent ACI)
-            return False, "edit not applied (the file is unchanged):\n" + result.observation()
+            applied = p.read_text()
+            p.write_text(old_text)
+            had = static_problems([p], self.ws, self.run_dir)
+            p.write_text(old_text)
+            if {re.sub(r":\d+:", ":", x) for x in result.failed.items} - had:
+                # edits that add static problems are not applied (SWE-agent ACI)
+                return False, "edit not applied (the file is unchanged):\n" + result.observation()
+            # the edit only kept problems the file already had: apply it and say where they are
+            p.write_text(applied)
+            note = "\nThe file still has problems from before this edit:\n" + "\n".join(
+                _locate(x, applied) for x in result.failed.items[:8])
+            result = VerifyResult([check_tests(_select_tests([p], self.ws, "related"), self.ws, self.run_dir, 120)])
         if before is not None and result.failed is not None and result.failed.stage == "tests":
             after = failing_tests(self.ws, self.run_dir)
             broken = sorted(after - before) if after is not None else ["(test collection)"]
@@ -282,7 +314,7 @@ class Harness:
                 return False, ("edit reverted: it broke tests that passed before: " + ", ".join(broken[:5])
                                + "\n" + result.observation())
         st.failing_cache = None
-        return result.ok, result.observation()
+        return result.ok, result.observation() + note
 
     def _failing(self, st) -> set[str] | None:
         """Failing tests right now, cached until the next file change."""
@@ -319,7 +351,11 @@ class Harness:
             new = replace_symbol(src, name, extract_code(self._code(st, instruction, context, "edit_symbol")))
         except (FenceError, SymbolError) as e:
             return False, f"could not apply the edit: {e}"
-        return self._commit(st, f, new)
+        ok, text = self._commit(st, f, new)
+        if (self.ws / f).read_text() != src:  # applied: show the edited code from now on instead of a re-read
+            st.working = [w for w in st.working if w != target][-2:] + [target]
+            st.seen[target] = self._digest(f)
+        return ok, text
 
     def do_add_symbol(self, st, target):
         src = (self.ws / target).read_text()

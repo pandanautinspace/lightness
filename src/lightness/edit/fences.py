@@ -34,6 +34,17 @@ def blocks(text: str) -> list[tuple[str, str]]:
     return out
 
 
+_FILENAME_LINE = re.compile(r"^\s*(file:\s*)?[\w./-]+\.py\s*$")
+
+
+def _drop_filename_echo(body: str) -> str:
+    """Drop a first line that only names the file (`ingest.py`), which some models echo."""
+    lines = body.splitlines()
+    if lines and _FILENAME_LINE.match(lines[0]):
+        return "\n".join(lines[1:])
+    return body
+
+
 def extract_code(text: str, filename: str | None = None) -> str:
     """Return the single code block in `text`.
 
@@ -49,6 +60,7 @@ def extract_code(text: str, filename: str | None = None) -> str:
         except SyntaxError:
             raise FenceError("no code block found") from None
         return candidate + "\n"
+    found = [(info, _drop_filename_echo(b)) for info, b in found]
     if len(found) == 1:
         return found[0][1].rstrip() + "\n"
     if filename:

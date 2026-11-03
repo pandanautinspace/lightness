@@ -43,6 +43,10 @@ def test_single_block_with_chatter():
     assert extract_code(text) == "x = 1\n"
 
 
+def test_filename_echo_line_is_dropped():
+    assert extract_code("```python\ningest.py\nimport json\n```") == "import json\n"
+
+
 def test_no_language_tag_and_tildes():
     assert extract_code("~~~\nx = 1\n~~~") == "x = 1\n"
 

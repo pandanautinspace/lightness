@@ -6,6 +6,7 @@ broken down by where tokens and time went.
 
 import json
 import os
+import re
 import time
 import tomllib
 from dataclasses import dataclass, field
@@ -108,7 +109,7 @@ class Client:
         if stop:
             body["stop"] = stop
         if schema is not None:
-            body["response_format"] = {"type": "json_schema", "json_schema": {"name": purpose, "schema": _typed(schema), "strict": True}}
+            body["response_format"] = {"type": "json_schema", "json_schema": {"name": re.sub(r"[^A-Za-z0-9_-]", "_", purpose), "schema": _typed(schema), "strict": True}}
         if self.caps.thinking_toggle:
             body["chat_template_kwargs"] = {"enable_thinking": bool(thinking)}
         if thinking is not True and thinking and self.caps.thinking_budget_field:

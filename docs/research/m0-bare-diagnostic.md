@@ -88,8 +88,8 @@ Every run ended by submitting. There were 0 malformed tool calls in 274 turns.
     Accepted for now.
 - **Runner:** `verify()` now resolves relative run directories.
 - **Sandbox:**
-  - Reads under `$HOME` were open, so the agent could read hidden tests and solutions; reads
-    there now trigger macOS privacy prompts no longer.
+  - Reads under `$HOME` were open, so the agent could read hidden tests and solutions, and
+    broad reads triggered macOS privacy prompts.
   - Fixed: only the run dir, the venv and `src/` are readable under `$HOME`.
 
 ## Next

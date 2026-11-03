@@ -16,6 +16,7 @@ class Step:
     status: str = "todo"  # todo | done | failed
     attempts: int = 0  # failed verifications on this step
     turns: int = 0  # turns spent while this was the current step
+    kind: str = "code"  # code | reproduce | test | final
 
 
 @dataclass
@@ -42,6 +43,8 @@ class RunState:
     working: list[str] = field(default_factory=list)  # recently read FILE::SYMBOL, shown in full each turn
     last_change_turn: int = 0
     seen: dict[str, str] = field(default_factory=dict)  # read target -> content digest when shown
+    noop: dict[str, int] = field(default_factory=dict)  # edit target -> last_change_turn when it was a no-op
+    turn_action_target: str = ""
     failing_cache: tuple[int, list[str]] | None = None  # (last_change_turn, failing test ids) for revert
     green_since: int | None = None  # turn at which everything last passed with no change since
     finished: bool = False

@@ -27,8 +27,9 @@ PLAN_SCHEMA = {
             "goal": {"type": "string"},
             "files": {"type": "array", "items": {"type": "string"}},
             "check": {"type": "string"},
+            "kind": {"enum": ["code", "reproduce", "test", "final"]},
         },
-        "required": ["goal", "files", "check"],
+        "required": ["goal", "files", "check", "kind"],
         "additionalProperties": False,
     }}},
     "required": ["steps"],
@@ -58,7 +59,9 @@ Rules:
 - Never restructure, rename or change the return types of existing code the change doesn't need.
 - Keep modules small; separate logic from I/O so it can be tested directly.
 - files: the files each step creates or changes (relative paths). Test files are named test_*.py.
-- check: how we'll know the step worked (which tests pass, which command runs)."""
+- check: how we'll know the step worked (which tests pass, which command runs).
+- kind: "reproduce" for a test that must fail on the current code because it shows a reported bug;
+  "test" for writing tests; "final" for the last check; "code" for everything else."""
 
 
 def probes_prompt(spec: Spec) -> str:

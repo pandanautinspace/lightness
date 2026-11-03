@@ -15,8 +15,8 @@ SPEC = {"goal": "greet people", "non_goals": [], "features": [{"name": "greet", 
         "contract": ["python greet.py NAME prints Hi NAME"], "data_model": "none"}
 PROBE = {"kind": "cli", "description": "greets", "setup_files": [], "args": ["greet.py", "Ann"], "expect_exit": 0,
          "expect_json": False}
-PLAN = {"steps": [{"goal": "write greet", "files": ["greet.py"], "check": "imports"},
-                  {"goal": "test greet", "files": ["test_greet.py"], "check": "tests pass"}]}
+PLAN = {"steps": [{"goal": "write greet", "files": ["greet.py"], "check": "imports", "kind": "code"},
+                  {"goal": "test greet", "files": ["test_greet.py"], "check": "tests pass", "kind": "test"}]}
 GREET = "import sys\n\n\ndef greet(name):\n    return f'Hi {name}'\n\n\nif __name__ == '__main__':\n    print(greet(sys.argv[1]))\n"
 GREET_BUGGY = GREET.replace("Hi {name}", "Hello {name}")
 TEST = "from greet import greet\n\n\ndef test_greet():\n    assert greet('Ann') == 'Hi Ann'\n"
@@ -147,3 +147,23 @@ def test_edit_that_breaks_passing_tests_is_reverted(ws):
     assert not last.ok and "edit reverted" in last.text and "test_greet" in last.text
     assert "Hi {name}" in (ws / "greet.py").read_text()
     assert str(ws) not in last.text  # paths shortened
+
+
+def test_edit_failing_static_checks_is_not_applied(ws):
+    st, _ = run(ws, [("write_file", "greet.py"), ("edit_symbol", "greet.py::greet")],
+                {"greet.py": [GREET, "def greet(name):\n    return undefined_helper(name)\n"]})
+    last = st.observations[-1]
+    assert not last.ok and "edit not applied" in last.text and "F821" in last.text
+    assert "Hi {name}" in (ws / "greet.py").read_text()
+
+
+def test_reproduce_step_must_fail(ws):
+    client = ScriptedClient([("write_file", "greet.py"), ("done_step", ""), ("write_file", "test_greet.py"),
+                             ("done_step", "")], {"greet.py": [GREET], "test_greet.py": [TEST]})
+    h = Harness(client, ws, DefaultsUser(), run_dir=ws.parent)
+    st = h.setup("greeting is wrong")
+    st.plan[1].kind = "reproduce"
+    while client.actions:
+        h.turn(st)
+    last = st.observations[-1]
+    assert not last.ok and "does not reproduce" in last.text and st.plan[1].status == "todo"

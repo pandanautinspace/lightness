@@ -81,7 +81,7 @@ class Harness:
                                    purpose="plan", reason_budget=1024, max_tokens=2000).parsed["steps"]
         start = max((s.id for s in st.plan), default=0)
         limit = 3 if st.spec and st.spec.project_type == "repo-change" else 8
-        return [Step(start + i + 1, s["goal"], [f for f in s["files"] if re.match(PATH_RE, f)], s["check"])
+        return [Step(start + i + 1, s["goal"], [f for f in s["files"] if re.match(PATH_RE, f)], s["check"], kind=s["kind"])
                 for i, s in enumerate(steps[:limit])]
 
     # --- menu ---------------------------------------------------------------------------------
@@ -118,8 +118,9 @@ class Harness:
             m["read_symbol"] = {"enum": unseen_syms}
         m["search"] = string
         m["write_file"] = {"type": "string", "pattern": PATH_RE}
-        if syms:
-            m["edit_symbol"] = {"enum": syms}
+        editable = [x for x in syms if st.noop.get(x) != st.last_change_turn]
+        if editable:
+            m["edit_symbol"] = {"enum": editable}
         if py_read:
             m["add_symbol"] = {"enum": py_read}
         m["run"] = string
@@ -132,7 +133,7 @@ class Harness:
         m["revise_plan"] = {"const": ""}
         if st.current:
             m["done_step"] = {"const": ""}
-        else:
+        if not st.current or st.last_change_turn > 0:
             m["done"] = {"const": ""}
         step = st.current
         if step and step.turns > STEP_TURNS:
@@ -182,6 +183,7 @@ class Harness:
             self.save(st)
             return
         action, target = choice["action"], choice["target"]
+        st.turn_action_target = target if action in ("edit_symbol", "write_file", "add_symbol") else ""
         self.recent_actions.append((action, target, st.last_change_turn))
         if st.current:
             st.current.turns += 1
@@ -252,6 +254,8 @@ class Harness:
         if not p.resolve().is_relative_to(self.ws.resolve()):
             return False, "refused: path outside the project"
         if p.exists() and p.read_text() == new_text:
+            if st.turn_action_target:
+                st.noop[st.turn_action_target] = st.last_change_turn
             return False, "no change made: the new content is identical to the current file"
         if Path(rel).name.startswith("test_"):
             project = [f for f in self.files() if f.endswith(".py") and not Path(f).name.startswith("test_")]
@@ -267,6 +271,9 @@ class Harness:
         self._mark_read(st, rel)
         st.last_change_turn, st.green_since = st.turn, None
         result = verify(self.ws, [p], run_dir=self.run_dir)
+        if old_text is not None and result.failed is not None and result.failed.stage in ("parse", "ruff", "types"):
+            p.write_text(old_text)  # edits that don't pass static checks are not applied (SWE-agent ACI)
+            return False, "edit not applied (the file is unchanged):\n" + result.observation()
         if before is not None and result.failed is not None and result.failed.stage == "tests":
             after = failing_tests(self.ws, self.run_dir)
             broken = sorted(after - before) if after is not None else ["(test collection)"]
@@ -390,6 +397,19 @@ class Harness:
         missing = [f for f in step.files if not (self.ws / f).exists()]
         if missing:
             return False, f"step files not written yet: {', '.join(missing)}"
+        if step.kind == "reproduce":
+            tests = [f for f in files if f.name.startswith("test_")]
+            if not tests:
+                return False, "a reproduce step needs a test file (test_*.py) that shows the reported problem"
+            c = check_tests(tests, self.ws, self.run_dir, 120)
+            if c.ok:
+                return False, ("this test passes on the current code, so it does not reproduce the reported "
+                               f"problem. Re-read the report and test exactly what it describes:\n{st.task[:600]}")
+            if "assert" not in c.summary.lower():
+                return False, "the test errors instead of failing an assertion; fix the test itself:\n" + c.summary
+            step.status, st.tried = "done", []
+            st.facts.append(f"Reproduced the problem: {c.summary.splitlines()[0][:150]}")
+            return True, f"step {step.id} done: the problem is reproduced.\n{c.summary}\nnext: {st.current.goal if st.current else 'done'}"
         if files:
             r = verify(self.ws, files, run_dir=self.run_dir)
             if not r.ok:

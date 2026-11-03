@@ -187,3 +187,87 @@ class Compaction(Middleware):
                 cut += 1
         if cut:
             ctx.log("compact", messages=cut, prompt_tokens=ctx.last_prompt_tokens)
+
+
+KIT_CLASSIFY = {
+    "type": "object",
+    "properties": {"kind": {"enum": ["tui", "cli", "data-script", "webapp", "other"]}},
+    "required": ["kind"],
+    "additionalProperties": False,
+}
+
+
+class Kit(Middleware):
+    """Start new apps from the kit for their type: the harness writes a working shell, shows the
+    design notes, a cheat sheet and the parts index, and checks the app still starts after each
+    change. Repo changes and apps no kit fits get nothing."""
+
+    name = "kit"
+
+    def start(self, ctx: Ctx) -> str | None:
+        from lightness import kits
+
+        if any(py_files(ctx.ws)):
+            return None  # existing code: no starting point to give
+        spec = ctx.data.get("spec")
+        task = ctx.task + (("\n\n" + render(spec)) if spec else "")
+        try:
+            kind = ctx.client.decide([{"role": "user", "content": (
+                "What kind of program does this request ask for?\n"
+                "- tui: an interactive terminal app (full-screen, keys)\n"
+                "- cli: a command-line tool that runs once and exits\n"
+                "- data-script: a script that reads, transforms or loads data files\n"
+                "- webapp: a web app or HTTP API\n"
+                "- other: none of these fits well\n\n" + task)}],
+                KIT_CLASSIFY, purpose="kit.classify").parsed["kind"]
+        except DecisionError:
+            return None
+        kit = kits.load_kit(kind)
+        ctx.log("kit.classify", kind=kind, available=kit is not None)
+        if kit is None:
+            return None
+        try:
+            names = ctx.client.decide([{"role": "user", "content": kit.names_prompt(task)}], kit.names_schema,
+                                      purpose="kit.names", max_tokens=1500).parsed
+            shell = kits.render_shell(kit, names)
+        except (DecisionError, ValueError) as e:
+            ctx.log("kit.failed", error=str(e)[:300])
+            return None
+        index = "\n".join(f"- {p.name}: {p.when}" for p in kit.parts)
+        try:
+            chosen = ctx.client.decide([{"role": "user", "content": (
+                f"Which of these patterns will this app need? Pick at most 3.\n\n{index}\n\n## Task\n{task}")}],
+                {"type": "object", "properties": {"parts": {"type": "array", "maxItems": 3, "items": {
+                    "enum": [p.name for p in kit.parts]}}}, "required": ["parts"], "additionalProperties": False},
+                purpose="kit.parts").parsed["parts"]
+        except DecisionError:
+            chosen = []
+        chosen = list(dict.fromkeys(kit.meta.get("always", []) + chosen))
+        (ctx.ws / kits.shell_path(kit, names)).write_text(shell)
+        parts_dir = ctx.ws / ".lightness" / "kit" / "parts"
+        parts_dir.mkdir(parents=True, exist_ok=True)
+        for p in kit.parts:
+            (parts_dir / p.path.name).write_text(p.path.read_text())
+        ctx.data["kit"] = (kit, names)
+        ctx.log("kit", kind=kind, names=names, parts=chosen)
+        return kits.context(kit, names, ".lightness/kit/parts", chosen)
+
+    def after_command(self, ctx: Ctx, command: str, output: dict) -> str | None:
+        from lightness.kits import smoke
+
+        if "kit" not in ctx.data or ctx.data["kit"][0].category != "tui":
+            return None
+        kit, names = ctx.data["kit"]
+        sig = repr(sorted(py_files(ctx.ws).items()))
+        if sig == ctx.data.get("kit.sig"):
+            return None  # nothing changed since the last smoke check
+        ctx.data["kit.sig"] = sig
+        results = smoke.tui(ctx.ws, names, ctx.run_dir)
+        if not results:
+            return None
+        text = smoke.summarize(results, f"{names['module']}.py")
+        previous, ctx.data["kit.smoke"] = ctx.data.get("kit.smoke"), text
+        ctx.log("smoke", ok=all(r.ok for r in results))
+        if text == previous or (previous is None and all(r.ok for r in results)):
+            return None  # only report changes (and never an initial "fine")
+        return shorten_paths("[automatic start check] " + text, ctx.ws, ctx.run_dir)

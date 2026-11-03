@@ -93,6 +93,16 @@ sqlite `get_db`/`init_db`, base layout + flash, CRUD routes (post-redirect-get),
 validation, JSON API with error handlers, auth, shortcode/redirect, table view with
 filter/sort/paginate, CSV download, upload handling, fetch-js snippet.
 
+**Open decision: widget framework for UI-centric webapps.** Writing HTML/JS/CSS is a large
+error surface for small models. A widget framework gives the same widgets-plus-state model as
+Textual, with fewer output tokens. Candidates: Streamlit (most familiar to models; rerun model
+and `session_state` are confusing; `AppTest` for headless tests; no JSON routes), NiceGUI
+(event-driven like Textual; FastAPI underneath, so JSON routes too; `User` test fixture),
+Gradio (function in/out; suits form → result). Benchmark contracts that specify HTTP routes
+still need Flask, so the likely split is a widget framework for CRUD, dashboards and
+form → result, and Flask for JSON APIs and hybrids. Decide with a probe: the 9B and 35B
+writing small apps in each, with and without kit notes.
+
 Shared across kits: json-store and sqlite-store, validation helpers, table/report rendering.
 
 ## Evaluation

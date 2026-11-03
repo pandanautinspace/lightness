@@ -1,0 +1,92 @@
+# Textual app kit. See docs/kits.md for the archetypes this must cover.
+
+# Parts always shown in full (not only in the index).
+always = ["headless_test"]
+
+[names.module]
+help = "file name of the app module without .py (e.g. the contract's `notes.py` → notes)"
+schema = { type = "string", pattern = "^[a-z_][a-z0-9_]{0,40}$" }
+
+[names.app_class]
+help = "name of the App subclass"
+schema = { type = "string", pattern = "^[A-Z][A-Za-z0-9]{0,40}$" }
+
+[names.title]
+help = "a short human title for the app"
+schema = { type = "string", maxLength = 60 }
+
+[names.storage]
+help = "how the app keeps data between runs: json (a JSON file), other (sqlite, plain text, ...), none"
+schema = { enum = ["json", "other", "none"] }
+
+[names.data_arg]
+help = "name of the App __init__ parameter for the data file path (contract's name if given), or \"\" if storage is none"
+schema = { type = "string", pattern = "^([a-z_][a-z0-9_]{0,30})?$" }
+
+[names.data_default]
+help = "default data file name when none is given on the command line (e.g. notes.json), or \"\""
+schema = { type = "string", pattern = "^[A-Za-z0-9_.-]{0,40}$" }
+
+[names.empty_value]
+help = "for json storage: the saved value when there is no data yet, as JSON ([] for a list, {} for an object)"
+schema = { enum = ["[]", "{}"] }
+
+[names.sample_data]
+help = "for json storage: a small example of the data file's contents in exactly the format the task describes (2-3 records), or \"\" if unknown"
+schema = { type = "string", maxLength = 1500 }
+
+[[parts]]
+name = "headless_test"
+when = "testing any Textual app: start it headless, press keys, check widgets and saved files"
+
+[[parts]]
+name = "list_actions"
+when = "a list of items with key actions on the highlighted one (toggle, delete, edit)"
+
+[[parts]]
+name = "input_form"
+when = "text inputs with validation, submit on enter, live recompute, Select/Checkbox"
+
+[[parts]]
+name = "modal"
+when = "a dialog over the app that returns a result (confirm, add/edit form)"
+
+[[parts]]
+name = "data_table"
+when = "tabular records with a row cursor, sorting, selecting a row"
+
+[[parts]]
+name = "filter"
+when = "filter-as-you-type: an input narrowing what a list or table shows"
+
+[[parts]]
+name = "periodic_refresh"
+when = "anything that updates on a timer (clock, stopwatch, monitor), with a testable tick"
+
+[[parts]]
+name = "worker"
+when = "slow or blocking work (file scans, lookups) without freezing the UI"
+
+[[parts]]
+name = "tree_detail"
+when = "a tree (JSON, folders, outline) on the left and details of the selected node on the right"
+
+[[parts]]
+name = "screens_tabs"
+when = "several screens or tabs, switching between them and passing data"
+
+[[parts]]
+name = "grid_game"
+when = "a grid of cells driven by keys or clicks (board games, simulations)"
+
+[[parts]]
+name = "text_editor"
+when = "editing text with TextArea: load, save, unsaved-changes flag"
+
+[[parts]]
+name = "sqlite_store"
+when = "keeping records in a sqlite database file instead of JSON"
+
+[[parts]]
+name = "file_loader"
+when = "reading an input file given as an argument (CSV, JSON, text) with clear errors"

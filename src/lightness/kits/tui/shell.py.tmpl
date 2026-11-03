@@ -1,0 +1,89 @@
+"""{{title}}
+
+Run: python {{module}}.py{{usage_arg}}
+"""
+
+# [json]
+import json
+# [/json]
+import sys
+# [path]
+from pathlib import Path
+# [/path]
+
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.widgets import Footer, Header, Static
+
+# [path]
+DEFAULT_DATA = "{{data_default}}"
+# [/path]
+# [json]
+
+
+def load_data(path: Path):
+    """The saved data, or the empty value when the file is missing or unreadable."""
+    try:
+        return json.loads(path.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {{empty_value}}
+
+
+def save_data(path: Path, data) -> None:
+    """Write the whole data file at once (to a temp file, then rename), in exactly the saved format."""
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2))
+    tmp.replace(path)
+
+
+# [/json]
+class {{app_class}}(App):
+    """State lives in plain Python data on the app; widgets only display it.
+    After every change: update the data, save it, then call refresh_view()."""
+
+    TITLE = "{{title}}"
+    CSS = """
+    #main {
+        height: 1fr;
+    }
+    """
+    BINDINGS = [
+        Binding("ctrl+q", "quit", "Quit"),
+    ]
+
+    def __init__(self{{init_params}}) -> None:
+        super().__init__()
+        # [path]
+        self.{{data_arg}} = Path({{data_arg}})
+        # [/path]
+        # [json]
+        self.data = load_data(self.{{data_arg}})
+        # [/json]
+
+    def compose(self) -> ComposeResult:
+        """Create every widget here. Fill in their content in refresh_view()."""
+        yield Header()
+        yield Static("", id="main")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.refresh_view()
+
+    def refresh_view(self) -> None:
+        """Make the widgets show the current state. Safe to call any time after mount."""
+        self.query_one("#main", Static).update("")
+
+    # [json]
+    def save(self) -> None:
+        save_data(self.{{data_arg}}, self.data)
+
+    # [/json]
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = sys.argv[1:] if argv is None else argv
+    {{main_body}}
+
+
+if __name__ == "__main__":
+    main()

@@ -134,3 +134,57 @@ def test_guard_plain_command_unchanged(ws):
     a.run("x")
     out = json.loads(tool_outputs(client)[0])
     assert out == {"returncode": 3, "output": "hi\n"}
+
+
+class KitClient(FakeClient):
+    """FakeClient that also answers the kit's decide() calls."""
+
+    def __init__(self, commands, names):
+        super().__init__(commands)
+        self.answers = {"kit.classify": {"kind": "tui"}, "kit.names": names, "kit.parts": {"parts": ["list_actions"]}}
+
+    def decide(self, messages, schema, *, purpose, **kw):
+        return Reply(text="", parsed=self.answers[purpose])
+
+
+NOTES = {"module": "notes", "app_class": "NotesApp", "title": "Notes", "storage": "json", "data_arg": "data_path",
+         "data_default": "notes.json", "empty_value": "[]", "sample_data": '[{"text": "a"}]'}
+
+
+def test_kit_writes_shell_and_reports_start_changes(ws):
+    break_css = "sed -i '' 's/height: 1fr;/height: 1fr; colour: red;/' notes.py"
+    fix_css = "sed -i '' 's/ colour: red;//' notes.py"
+    run_dir = ws.parent
+    env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
+    client = KitClient(["ls", break_css, fix_css, "true"], NOTES)
+    task = "Make a notes app. Contract: notes.py defines NotesApp(data_path)."
+    TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit()], step_limit=5).run(task)
+    first_user = client.seen[0][1]["content"]
+    assert "I created `notes.py`" in first_user and "### Part `headless_test`" in first_user
+    assert "### Part `list_actions`" in first_user and "### Part `modal`" not in first_user
+    assert (ws / ".lightness" / "kit" / "parts" / "modal.py").exists()
+    outs = tool_outputs(client)
+    assert "[automatic start check]" not in outs[0]  # fine from the start: nothing to say
+    assert "crashes when starting with no data file" in outs[1]
+    assert "notes.py starts cleanly" in outs[2]
+
+
+def test_kit_smoke_catches_crash_on_existing_data(ws):
+    load_bug = ("sed -i '' 's/        self.refresh_view()/        self.refresh_view()\\n"
+                "        self.first = self.data[0][\"title\"] if self.data else None/' notes.py")
+    run_dir = ws.parent
+    env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
+    client = KitClient([load_bug, "true"], NOTES)
+    TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit()], step_limit=3).run("notes app")
+    out = tool_outputs(client)[0]
+    assert "crashes when starting with an existing data file" in out and "KeyError" in out
+    assert "no data file" not in out
+
+
+def test_kit_skips_existing_code(ws):
+    (ws / "app.py").write_text("print(1)\n")
+    client = KitClient(["true"], NOTES)
+    run_dir = ws.parent
+    env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
+    TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit()], step_limit=2).run("change it")
+    assert not (ws / "notes.py").exists() and "Starting point" not in client.seen[0][1]["content"]

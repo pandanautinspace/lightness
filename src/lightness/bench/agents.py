@@ -194,7 +194,7 @@ class LightnessAgent:
 class MiddlewareAgent:
     """The bare agent's loop with lightness middleware switched on by name (mw:checks,gate,...)."""
 
-    FEATURES = ("env", "workshop", "checks", "gate", "repeat", "compact", "guard")  # guard: command runner
+    FEATURES = ("env", "workshop", "kit", "checks", "gate", "repeat", "compact", "guard")  # guard: command runner
 
     def __init__(self, model_name: str, features: list[str], step_limit: int = 100):
         unknown = set(features) - set(self.FEATURES)
@@ -212,7 +212,7 @@ class MiddlewareAgent:
         calls = log_dir / "calls.jsonl"
         client = Client.from_registry(self.model_name, log_path=calls)
         user = SimulatedUser(client, task.intent)
-        build = {"env": mw.EnvNotes, "workshop": lambda: mw.Workshop(user), "checks": mw.Checks, "gate": mw.SubmitGate,
+        build = {"env": mw.EnvNotes, "workshop": lambda: mw.Workshop(user), "kit": mw.Kit, "checks": mw.Checks, "gate": mw.SubmitGate,
                  "repeat": mw.RepeatGuard, "compact": mw.Compaction}
         middleware = [build[f]() for f in self.FEATURES if f in self.features and f in build]  # fixed order
         env = os.environ | bench_env() | sandbox.sandbox_env(log_dir) | {

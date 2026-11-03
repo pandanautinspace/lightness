@@ -419,3 +419,11 @@ def test_try_app_unknown_widget_is_not_a_crash(tmp_path):
                   "focus:#nope", "focus:#items")
     assert "no widget matches '#nope' on this screen; ids here: #items, #new-item" in out
     assert "CRASH" not in out and "focus: #items" in out
+
+
+def test_try_app_documented_input_replace_works(tmp_path):
+    assert "press:end,ctrl+u" in (KITS_DIR / "tui" / "try.md").read_text()
+    (tmp_path / "conv.py").write_text((KITS_DIR / "tui" / "parts" / "input_form.py").read_text())
+    out = try_app(tmp_path, {"module": "conv", "app_class": "ConverterApp", "storage": "none"},
+                  "type:12", "focus:#amount", "press:end,ctrl+u", "type:3")
+    assert "after type:3:\n  #amount input: '3'" in out

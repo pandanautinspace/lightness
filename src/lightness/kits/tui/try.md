@@ -12,6 +12,7 @@ A crash prints the error.
 
 - Steps: `type:TEXT`, `press:KEY,KEY,...` (enter, space, up, down, tab, escape, ctrl+q, letters),
   `click:#id`, `focus:#id`, `wait:SECONDS`, `restart` (start again with the same data file).
+- To replace what an input holds: `focus:#id press:end,ctrl+u type:NEW` (ctrl+u clears to the left).
 - `--data 'TEXT'` starts with this data file; `--data-from FILE` copies one;
   `--kw NAME=VALUE` passes an extra App argument (e.g. a seed).
 - Example: `python .lightness/kit/try_app.py --data '...' focus:#some-list press:down,space restart`

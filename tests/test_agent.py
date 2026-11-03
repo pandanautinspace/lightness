@@ -200,3 +200,14 @@ def test_kit_skips_existing_code(ws):
     env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
     TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit()], step_limit=2).run("change it")
     assert not (ws / "notes.py").exists() and "Starting point" not in client.seen[0][1]["content"]
+
+
+def test_text_tool_call_recovery():
+    from lightness.agent.loop import text_tool_call
+
+    assert text_tool_call('Run it:\n```bash\n{"command": "ls -la"}\n```') == "ls -la"
+    assert text_tool_call('{"name": "bash", "parameters": {"command": "python a.py"}}') == "python a.py"
+    assert text_tool_call("Let me look.\n```bash\ncat a.py\n```\n") == "cat a.py"
+    assert text_tool_call("Plan: first ```bash\nls\n``` then ```bash\npwd\n```") is None  # two: unclear
+    assert text_tool_call('{"state": {"a": 1}}') is None
+    assert text_tool_call("No command here.") is None

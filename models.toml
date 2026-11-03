@@ -43,7 +43,7 @@ api_key_env = "OPENAI_API_KEY"
 env_file = ".env.parley"
 context = 65536
 mode = "strict"
-caps = { json_schema = true, thinking_toggle = false, thinking_budget_field = "", max_output = 8192, tool_required = true }
+caps = { json_schema = true, thinking_toggle = false, thinking_budget_field = "", max_output = 8192 }  # Bedrock: no tool_choice=required
 
 [haiku]
 base_url = "https://parley.api.mit.edu/v1"

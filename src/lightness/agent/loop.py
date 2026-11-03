@@ -7,6 +7,7 @@ to remember or decide (workshop, automatic checks after writes, a submit gate, c
 
 import json
 import platform
+import re
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -229,6 +230,31 @@ class Result:
     submitted: bool
 
 
+_FENCE = re.compile(r"```(\w*)[ \t]*\n(.*?)```", re.DOTALL)
+
+
+def text_tool_call(text: str) -> str | None:
+    """The command of a bash call written as text: one {"command": ...} JSON object (bare, fenced,
+    or wrapped as {"name": "bash", "parameters": {...}}), else one ```bash block. None if unclear."""
+    found = []
+    decoder = json.JSONDecoder()
+    i = text.find("{")
+    while i != -1:
+        try:
+            obj, end = decoder.raw_decode(text, i)
+        except json.JSONDecodeError:
+            i = text.find("{", i + 1)
+            continue
+        if isinstance(obj, dict):
+            inner = obj.get("parameters") or obj.get("arguments") or obj
+            if isinstance(inner, dict) and isinstance(inner.get("command"), str):
+                found.append(inner["command"])
+        i = text.find("{", end)
+    if not found:
+        found = [body.strip() for lang, body in _FENCE.findall(text) if lang in ("bash", "sh", "shell")]
+    return found[0] if len(found) == 1 and found[0].strip() else None
+
+
 class TranscriptAgent:
     def __init__(self, client: Client, ws: Path, run_dir: Path, env: dict[str, str], *,
                  middleware: list[Middleware] = (), step_limit: int = 100, wall_limit: float = 1800,
@@ -263,6 +289,11 @@ class TranscriptAgent:
             if reply.reasoning:  # kept out of the transcript, saved for failure analysis
                 with (self.run_dir / "reasoning.jsonl").open("a") as f:
                     f.write(json.dumps({"step": ctx.step, "reasoning": reply.reasoning}) + "\n")
+            if not reply.tool_calls and (command := text_tool_call(reply.text)) is not None:
+                # The model wrote the call as text instead of calling the tool: take it as the call.
+                reply.tool_calls = [{"id": f"text-{ctx.step}", "type": "function",
+                                     "function": {"name": "bash", "arguments": json.dumps({"command": command})}}]
+                ctx.log("text_tool_call")
             ctx.messages.append(self._assistant(reply))
             calls = [c for c in reply.tool_calls if c.get("function", {}).get("name") == "bash"]
             if not calls:

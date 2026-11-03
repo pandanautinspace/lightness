@@ -112,3 +112,20 @@ Shared across kits: json-store and sqlite-store, validation helpers, table/repor
   textual-todo as an out-of-set check.
 - Report pass rate and tests passed per archetype, output tokens, wall time, and kit
   failures (smoke false alarms, parts the model misused).
+
+### First result: textual-todo, 2026-11-03 (3 runs each; not a clean test, it informed the notes)
+
+| | tests passed | wall | output tokens |
+|---|---|---|---|
+| 35B `mw:env,guard` | 10, 1, 10 / 11 | ~420 s | ~19k |
+| 35B `mw:env,guard,kit` | 10, 10, 10 / 11 | ~1070 s | ~37k |
+| 9B `mw:env,guard` | 9, 1, 9 / 11 (all hit the 64k context) | ~1110 s | ~31k |
+| 9B `mw:env,guard,kit` | 10, 10, 10 / 11 (1 hit the context) | ~1680 s | ~45k |
+
+- The one failure in every run is the hidden-preference test (done items sorted to the
+  bottom); no condition asked questions, so 10/11 is the ceiling here.
+- The 1/11 runs crashed on a Widget constructor misuse: the kit's shell prevents this.
+- The kit's extra cost is model-written tests: 35–67k chars of test files per 35B run
+  (9B: ~140k) against 14–35k for the app. The notes and the headless_test part push
+  "cover every scenario" and the model rewrites whole test files. Next: harness-owned
+  contract scenarios, so the model supplies data, not test code.

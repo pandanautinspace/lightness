@@ -271,6 +271,13 @@ class TranscriptAgent:
         system = f"{platform.system()} {platform.release()} {platform.machine()}"
         ctx.messages = [{"role": "system", "content": SYSTEM},
                         {"role": "user", "content": INSTANCE.format(task=full_task, submit=SUBMIT, system=system)}]
+        try:
+            return self._loop(ctx)
+        except Exception:
+            (self.run_dir / "messages.json").write_text(json.dumps(ctx.messages, indent=1))  # for analysis
+            raise
+
+    def _loop(self, ctx: Ctx) -> Result:
         start = time.time()
         while True:
             if ctx.step >= self.step_limit:
@@ -293,6 +300,7 @@ class TranscriptAgent:
                 # The model wrote the call as text instead of calling the tool: take it as the call.
                 reply.tool_calls = [{"id": f"text-{ctx.step}", "type": "function",
                                      "function": {"name": "bash", "arguments": json.dumps({"command": command})}}]
+                reply.text = ""  # some APIs (Bedrock) reject text and a tool call in one message
                 ctx.log("text_tool_call")
             ctx.messages.append(self._assistant(reply))
             calls = [c for c in reply.tool_calls if c.get("function", {}).get("name") == "bash"]

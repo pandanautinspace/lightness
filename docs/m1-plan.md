@@ -186,9 +186,9 @@ Each item ends with a check we can run.
   - `edit_symbol` only lists symbols in files already read.
   - `done` appears only once acceptance tests exist.
   - After 2 failed repairs on a step, only `read`, `ask_user` and `revise_plan` are offered.
-  - A sandboxed `bash` action is always available as an escape hatch, so a capable model is
-    never boxed in. Its use is logged; if a model leans on it heavily, the menu is missing
-    something.
+  - No free `bash` action in strict mode. An always-available escape hatch could distract a
+    small model. A capable model gets it only in `loose` mode. Modes are set per model
+    profile in `models.toml`.
 - **Code-carrying actions** (`write_file`, `edit_symbol`, `write_tests`) make a second,
   unconstrained call that asks for exactly one fenced block. Its context is the step, the spec
   slice and the target outline or body. Thinking is off.
@@ -208,6 +208,15 @@ Each item ends with a check we can run.
   read by hand.
 
 ### 6. Bench integration and held-out tasks
+
+M0 note: the bare agent passed both repo-edit tasks but none of the from-scratch tasks.
+Possible reasons:
+- existing code pins down conventions;
+- existing tests give the agent a verifier;
+- the repo tasks had weak or guessable intents.
+
+So held-out repo tasks must carry intents that can't be guessed, and reports should split
+results by from-scratch vs repo-edit.
 
 - `LightnessAgent` in `bench/agents.py`.
   - Runs in-process. Writes go through the harness, which refuses any path outside the
@@ -291,8 +300,8 @@ goes there.
 - **Overfitting to the 8 dev tasks.** Mitigation: held-out tasks, written blind.
 - **The harness makes a capable model worse.** M0 showed the 35B writes working code well on
   its own; strict menus and forced steps add overhead and may cut off good strategies.
-  - Mitigation: the `lightness-auto` vs `bare` exit criterion, the `bash` escape hatch, and
-    the `lightness-loose` ablation.
+  - Mitigation: the `lightness-auto` vs `bare` exit criterion, and the `lightness-loose`
+    ablation (the only mode with a free `bash` action).
   - Every layer can be switched off, so we can keep only the ones that pay for themselves on
     each model size.
 - **A fixed step order is too rigid for repo-change tasks.** Mitigation: the default plan

@@ -45,6 +45,26 @@ class Workshop(Middleware):
                 "more specific than the issue, follow them exactly.\n\n" + render(spec))
 
 
+ENV_NOTES = """## Environment notes
+
+- The project is the current directory. Use relative paths; there is no /testbed, /app, /workspace or /root.
+- Python 3.12 with textual, rich, typer, flask, httpx, pytest and the standard library is already installed.
+  There is no pip and no network: never try to install anything.
+- /tmp is not writable. Put scratch files in the project directory or under $TMPDIR.
+- Commands have no terminal and no stdin: interactive programs (Textual apps, input(), a server in the
+  foreground) can't be driven directly. Test Textual apps headlessly with App.run_test(), CLIs by running
+  them with arguments, and Flask apps with app.test_client()."""
+
+
+class EnvNotes(Middleware):
+    """State the facts about the environment the models keep getting wrong (pip, /tmp, /testbed, no tty)."""
+
+    name = "env"
+
+    def start(self, ctx: Ctx) -> str | None:
+        return ENV_NOTES
+
+
 class Checks(Middleware):
     """After a command changes Python files: static checks on those files, and the test suite's
     status with any tests the change newly broke. The model gets this without asking for it."""

@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from pathlib import Path
 
 import pytest
@@ -34,11 +35,12 @@ def ws(tmp_path: Path) -> Path:
     return w
 
 
-def agent(ws, commands, middleware=(), step_limit=20):
+def agent(ws, commands, middleware=(), step_limit=20, guard=False):
     run_dir = ws.parent
     env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
     client = FakeClient(commands)
-    return TranscriptAgent(client, ws, run_dir, env, middleware=list(middleware), step_limit=step_limit), client
+    return TranscriptAgent(client, ws, run_dir, env, middleware=list(middleware), step_limit=step_limit,
+                           guard_commands=guard), client
 
 
 def tool_outputs(client):
@@ -104,3 +106,31 @@ def test_compaction_shortens_old_outputs(ws):
     a.run("x")
     outs = tool_outputs(client)
     assert "shortened by the harness" in outs[0] and "shortened" not in outs[-1]
+
+
+TUI = "from textual.app import App\nfrom textual.widgets import Label\n\n\nclass A(App):\n    def compose(self):\n        yield Label('hi')\n\n\nA().run()\n"
+
+
+def test_guard_stops_interactive_app_quickly(ws):
+    a, client = agent(ws, [write("app.py", TUI), "echo before && python app.py", "true"], guard=True)
+    t = time.time()
+    a.run("x")
+    out = tool_outputs(client)[1]
+    assert time.time() - t < 20
+    assert "interactive full-screen app" in out and "before" in out and "\\u001b[?1049h" not in out
+
+
+def test_guard_background_process_does_not_block(ws):
+    a, client = agent(ws, ["sleep 60 & echo started", "true"], guard=True)
+    t = time.time()
+    a.run("x")
+    out = tool_outputs(client)[0]
+    assert time.time() - t < 10
+    assert "started" in out and "stopped processes this command left running" in out
+
+
+def test_guard_plain_command_unchanged(ws):
+    a, client = agent(ws, ["echo hi; exit 3", "true"], guard=True)
+    a.run("x")
+    out = json.loads(tool_outputs(client)[0])
+    assert out == {"returncode": 3, "output": "hi\n"}

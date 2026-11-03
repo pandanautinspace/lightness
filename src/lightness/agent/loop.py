@@ -161,6 +161,51 @@ def observation(output: dict) -> str:
                        "elided_chars": len(text) - 10000, "warning": "Output too long."}, indent=2)
 
 
+ALT_SCREEN = "\x1b[?1049h"  # a full-screen terminal app (Textual, curses) has started
+INTERACTIVE_NOTE = ("\n(stopped by the harness: this started an interactive full-screen app, and commands have no "
+                    "terminal, so it would wait forever. Test Textual apps headlessly with App.run_test().)")
+BACKGROUND_NOTE = ("\n(the harness stopped processes this command left running in the background; each command "
+                   "runs on its own, so start a server and query it within the same command)")
+
+
+def run_command_guarded(command: str, ctx: Ctx, timeout: int = 120) -> dict:
+    """Like run_command, but never hangs on interactive apps or background processes: output goes to a
+    file (a background process can't hold a pipe open), stdin is closed, a full-screen app is stopped
+    as soon as it draws, and whatever the command left running is stopped when it exits."""
+    import os
+    import signal
+    import tempfile
+
+    with tempfile.TemporaryFile(mode="w+b", dir=ctx.run_dir) as out:
+        proc = subprocess.Popen(sandbox.wrap_shell(command, ctx.run_dir), shell=True, cwd=ctx.ws, env=ctx.env,
+                                stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
+                                start_new_session=True)
+        start, note = time.time(), ""
+        while proc.poll() is None:
+            if time.time() - start > timeout:
+                note = f"\n(command timed out after {timeout}s)"
+                break
+            out.seek(0)
+            if ALT_SCREEN.encode() in out.read():
+                note = INTERACTIVE_NOTE
+                break
+            time.sleep(0.25)
+        try:  # stop the command if still running, and anything it started in the background
+            os.killpg(proc.pid, 0)
+            os.killpg(proc.pid, signal.SIGKILL)
+            if not note:
+                note = BACKGROUND_NOTE
+        except ProcessLookupError:
+            pass
+        proc.wait()
+        out.seek(0)
+        text = out.read().decode(errors="replace")
+    if note == INTERACTIVE_NOTE:
+        text = text.split(ALT_SCREEN)[0]  # drop the escape-code soup the app drew
+    returncode = -1 if note and note != BACKGROUND_NOTE else proc.returncode
+    return {"output": text + note, "returncode": returncode}
+
+
 def run_command(command: str, ctx: Ctx, timeout: int = 120) -> dict:
     try:
         proc = subprocess.run(sandbox.wrap_shell(command, ctx.run_dir), shell=True, cwd=ctx.ws, env=ctx.env,
@@ -181,8 +226,10 @@ class Result:
 
 class TranscriptAgent:
     def __init__(self, client: Client, ws: Path, run_dir: Path, env: dict[str, str], *,
-                 middleware: list[Middleware] = (), step_limit: int = 100, wall_limit: float = 1800):
+                 middleware: list[Middleware] = (), step_limit: int = 100, wall_limit: float = 1800,
+                 guard_commands: bool = False):
         self.client, self.ws, self.run_dir, self.env = client, ws, run_dir, env
+        self.runner = run_command_guarded if guard_commands else run_command
         self.middleware = list(middleware)
         self.step_limit, self.wall_limit = step_limit, wall_limit
 
@@ -229,7 +276,7 @@ class TranscriptAgent:
                     continue
                 for m in self.middleware:
                     m.before_command(ctx, command)
-                output = run_command(command, ctx)
+                output = self.runner(command, ctx)
                 notes = [x for m in self.middleware if (x := m.after_command(ctx, command, output))]
                 ctx.messages.append(self._tool(call, observation(output) + "".join("\n\n" + n for n in notes)))
 

@@ -194,7 +194,7 @@ class LightnessAgent:
 class MiddlewareAgent:
     """The bare agent's loop with lightness middleware switched on by name (mw:checks,gate,...)."""
 
-    FEATURES = ("workshop", "checks", "gate", "repeat", "compact")
+    FEATURES = ("env", "workshop", "checks", "gate", "repeat", "compact", "guard")  # guard: command runner
 
     def __init__(self, model_name: str, features: list[str], step_limit: int = 100):
         unknown = set(features) - set(self.FEATURES)
@@ -212,13 +212,13 @@ class MiddlewareAgent:
         calls = log_dir / "calls.jsonl"
         client = Client.from_registry(self.model_name, log_path=calls)
         user = SimulatedUser(client, task.intent)
-        build = {"workshop": lambda: mw.Workshop(user), "checks": mw.Checks, "gate": mw.SubmitGate,
+        build = {"env": mw.EnvNotes, "workshop": lambda: mw.Workshop(user), "checks": mw.Checks, "gate": mw.SubmitGate,
                  "repeat": mw.RepeatGuard, "compact": mw.Compaction}
-        middleware = [build[f]() for f in self.FEATURES if f in self.features]  # fixed order: workshop first
+        middleware = [build[f]() for f in self.FEATURES if f in self.features and f in build]  # fixed order
         env = os.environ | bench_env() | sandbox.sandbox_env(log_dir) | {
             "PAGER": "cat", "MANPAGER": "cat", "LESS": "-R", "PIP_PROGRESS_BAR": "off", "TQDM_DISABLE": "1"}
         agent = TranscriptAgent(client, ws, log_dir, env, middleware=middleware, step_limit=self.step_limit,
-                                wall_limit=task.agent_timeout_sec)
+                                wall_limit=task.agent_timeout_sec, guard_commands="guard" in self.features)
         start = time.time()
         try:
             status = agent.run(task.instruction).status

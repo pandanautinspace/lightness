@@ -44,6 +44,8 @@ class Caps:
     reasoning_reserve: int = 0
     # The endpoint's output limit; larger requests are clamped to it (0 = no limit).
     max_output: int = 0
+    # Send tool_choice="required" with tools, so every reply is a tool call.
+    tool_required: bool = False
 
 
 @dataclass
@@ -109,6 +111,8 @@ class Client:
                                 "max_tokens": self._clamp(max_tokens + self.caps.reasoning_reserve), **self.sampling}
         if tools:
             body["tools"] = tools
+            if self.caps.tool_required:
+                body["tool_choice"] = "required"
         if temperature is not None:
             body["temperature"] = temperature
         if stop:

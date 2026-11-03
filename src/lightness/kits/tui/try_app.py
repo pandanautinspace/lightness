@@ -231,6 +231,10 @@ async def run(cls, args_for_app, kw, data_path, steps) -> int:
                         await pilot.press(*value)
                     elif action == "press":
                         await pilot.press(*[k.strip() for k in value.split(",") if k.strip()])
+                    elif action in ("click", "focus") and not app.screen.query(value):
+                        ids = sorted(f"#{w.id}" for w in app.screen.query("*") if w.id and not w.id.startswith("-"))
+                        print(f"  no widget matches {value!r} on this screen; ids here: {', '.join(ids) or 'none'}")
+                        continue
                     elif action == "click":
                         await pilot.click(value)
                     elif action == "focus":

@@ -34,7 +34,7 @@ api_key_env = "OPENAI_API_KEY"
 env_file = ".env.parley"
 context = 65536
 mode = "strict"
-caps = { json_schema = true, thinking_toggle = false, thinking_budget_field = "", reasoning_reserve = 8000 }
+caps = { json_schema = true, thinking_toggle = false, thinking_budget_field = "", reasoning_reserve = 8000, tool_required = true }
 
 [maverick]
 base_url = "https://parley.api.mit.edu/v1"
@@ -43,7 +43,7 @@ api_key_env = "OPENAI_API_KEY"
 env_file = ".env.parley"
 context = 65536
 mode = "strict"
-caps = { json_schema = true, thinking_toggle = false, thinking_budget_field = "", max_output = 8192 }
+caps = { json_schema = true, thinking_toggle = false, thinking_budget_field = "", max_output = 8192, tool_required = true }
 
 [haiku]
 base_url = "https://parley.api.mit.edu/v1"
@@ -52,4 +52,4 @@ api_key_env = "OPENAI_API_KEY"
 env_file = ".env.parley"
 context = 65536
 mode = "strict"
-caps = { json_schema = true, thinking_toggle = false, thinking_budget_field = "" }
+caps = { json_schema = true, thinking_toggle = false, thinking_budget_field = "", tool_required = true }

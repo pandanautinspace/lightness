@@ -411,3 +411,11 @@ def test_try_app_grid_modal_and_crash(tmp_path):
                                         "        raise RuntimeError('boom')\n")
     out = try_app(tmp_path, {"module": "broken", "app_class": "B", "storage": "none"})
     assert "CRASH:" in out and "RuntimeError: boom" in out and "broken.py" in out
+
+
+def test_try_app_unknown_widget_is_not_a_crash(tmp_path):
+    (tmp_path / "bookmarks.py").write_text((KITS_DIR / "tui" / "parts" / "list_actions.py").read_text())
+    out = try_app(tmp_path, {"module": "bookmarks", "app_class": "ListActionsApp", "storage": "none"},
+                  "focus:#nope", "focus:#items")
+    assert "no widget matches '#nope' on this screen; ids here: #items, #new-item" in out
+    assert "CRASH" not in out and "focus: #items" in out

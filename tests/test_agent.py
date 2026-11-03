@@ -118,6 +118,15 @@ def test_guard_stops_interactive_app_quickly(ws):
     out = tool_outputs(client)[1]
     assert time.time() - t < 20
     assert "interactive full-screen app" in out and "before" in out and "\\u001b[?1049h" not in out
+    assert "run_test()" in out and "try_app.py" not in out
+
+
+def test_guard_points_to_try_app_when_the_kit_gave_one(ws):
+    (ws / ".lightness" / "kit").mkdir(parents=True)
+    (ws / ".lightness" / "kit" / "try_app.py").write_text("")
+    a, client = agent(ws, [write("app.py", TUI), "python app.py", "true"], guard=True)
+    a.run("x")
+    assert "python .lightness/kit/try_app.py" in tool_outputs(client)[1]
 
 
 def test_guard_background_process_does_not_block(ws):

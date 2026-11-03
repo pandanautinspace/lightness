@@ -164,6 +164,9 @@ def observation(output: dict) -> str:
 ALT_SCREEN = "\x1b[?1049h"  # a full-screen terminal app (Textual, curses) has started
 INTERACTIVE_NOTE = ("\n(stopped by the harness: this started an interactive full-screen app, and commands have no "
                     "terminal, so it would wait forever. Test Textual apps headlessly with App.run_test().)")
+TRY_NOTE = ("\n(stopped by the harness: this started an interactive full-screen app, and commands have no "
+            "terminal, so it would wait forever. To see what the app does, run "
+            "`python .lightness/kit/try_app.py STEP ...`: it runs the app headless and prints the screen.)")
 BACKGROUND_NOTE = ("\n(the harness stopped processes this command left running in the background; each command "
                    "runs on its own, so start a server and query it within the same command)")
 
@@ -202,6 +205,8 @@ def run_command_guarded(command: str, ctx: Ctx, timeout: int = 120) -> dict:
         text = out.read().decode(errors="replace")
     if note == INTERACTIVE_NOTE:
         text = text.split(ALT_SCREEN)[0]  # drop the escape-code soup the app drew
+        if (ctx.ws / ".lightness" / "kit" / "try_app.py").exists():
+            note = TRY_NOTE
     returncode = -1 if note and note != BACKGROUND_NOTE else proc.returncode
     return {"output": text + note, "returncode": returncode}
 

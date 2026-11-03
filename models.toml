@@ -1,10 +1,18 @@
 # Endpoints the bench and harness can talk to. All OpenAI-compatible.
+# caps: what the endpoint supports (see lightness.provider.Caps; probe with scripts/probe.py).
+# mode: harness strictness for this model — "strict" (constrained action menu only) or
+#       "loose" (adds a free sandboxed bash action).
+
 [qwen27]
 base_url = "http://127.0.0.1:8080/v1"
 model = "qwen27"
 context = 65536
+mode = "strict"
+caps = { json_schema = true, thinking_toggle = true, thinking_budget_field = "thinking_budget_tokens" }
 
 [qwen35a3]
 base_url = "http://127.0.0.1:8080/v1"
 model = "qwen35a3"
 context = 65536
+mode = "strict"
+caps = { json_schema = true, thinking_toggle = true, thinking_budget_field = "thinking_budget_tokens" }

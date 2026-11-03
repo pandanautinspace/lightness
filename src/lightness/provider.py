@@ -49,6 +49,7 @@ class Reply:
     timings: dict = field(default_factory=dict)
     latency: float = 0.0
     finish_reason: str = ""
+    tool_calls: list[dict] = field(default_factory=list)  # OpenAI format, as returned
 
 
 Thinking = bool | int  # False = off, True = on (server cap), int = on with this token budget
@@ -89,8 +90,11 @@ class Client:
         max_tokens: int = 4096,
         stop: list[str] | None = None,
         temperature: float | None = None,
+        tools: list[dict] | None = None,
     ) -> Reply:
         body: dict[str, Any] = {"model": self.model, "messages": messages, "max_tokens": max_tokens, **self.sampling}
+        if tools:
+            body["tools"] = tools
         if temperature is not None:
             body["temperature"] = temperature
         if stop:
@@ -127,6 +131,7 @@ class Client:
             timings=data.get("timings", {}),
             latency=latency,
             finish_reason=choice.get("finish_reason", ""),
+            tool_calls=msg.get("tool_calls") or [],
         )
         self._log(purpose, reply, latency, ok=True, thinking=thinking)
         return reply

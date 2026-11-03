@@ -86,11 +86,12 @@ def check_parse(files: list[Path], ws: Path) -> Check:
     return Check("parse", True)
 
 
-def check_ruff(files: list[Path], ws: Path, run_dir: Path | None) -> Check:
+def check_ruff(files: list[Path], ws: Path, run_dir: Path | None, fix: bool = True) -> Check:
     names = [str(f.relative_to(ws)) for f in files]
-    _run([str(BIN / "ruff"), "check", "--fix", "--select", RUFF_SELECT, "--unfixable", RUFF_UNFIXABLE,
-          "--quiet", *names], ws, run_dir, 60)
-    _run([str(BIN / "ruff"), "format", "--quiet", *names], ws, run_dir, 60)
+    if fix:
+        _run([str(BIN / "ruff"), "check", "--fix", "--select", RUFF_SELECT, "--unfixable", RUFF_UNFIXABLE,
+              "--quiet", *names], ws, run_dir, 60)
+        _run([str(BIN / "ruff"), "format", "--quiet", *names], ws, run_dir, 60)
     proc = _run([str(BIN / "ruff"), "check", "--select", RUFF_SELECT, "--output-format", "json", *names],
                 ws, run_dir, 60)
     try:
@@ -191,12 +192,13 @@ def verify(
     tests: str = "related",  # "related" | "all" | "none"
     types: bool = True,
     test_timeout: int = 120,
+    fix: bool = True,  # False: check only, never rewrite the files
 ) -> VerifyResult:
     result = VerifyResult()
     py = [f for f in touched if f.suffix == ".py" and f.exists()]
     for check in (
         lambda: check_parse(py, ws),
-        lambda: check_ruff(py, ws, run_dir) if py else Check("ruff", True),
+        lambda: check_ruff(py, ws, run_dir, fix) if py else Check("ruff", True),
         lambda: check_pyright(py, ws, run_dir) if py and types else Check("types", True),
         lambda: check_tests(_select_tests(py, ws, tests), ws, run_dir, test_timeout)
         if tests != "none" else Check("tests", True),

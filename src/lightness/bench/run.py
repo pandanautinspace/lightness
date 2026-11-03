@@ -2,6 +2,7 @@
 
     uv run python -m lightness.bench.run --agent oracle
     uv run python -m lightness.bench.run --agent bare --model qwen27 --tasks file-organizer --runs 3
+    uv run python -m lightness.bench.run --agent mw:workshop,checks,gate --model qwen35a3
 """
 
 import json
@@ -19,7 +20,7 @@ from pathlib import Path
 import typer
 
 from lightness.bench import sandbox
-from lightness.bench.agents import BareAgent, LightnessAgent, NullAgent, OracleAgent, bench_env
+from lightness.bench.agents import BareAgent, LightnessAgent, MiddlewareAgent, NullAgent, OracleAgent, bench_env
 from lightness.bench.tasks import REPO_ROOT, Task, all_task_ids, load_task
 
 app = typer.Typer(add_completion=False)
@@ -41,6 +42,12 @@ def make_agent(name: str, model: str | None):
         return LightnessAgent(models[model], model)
     if name == "lightness-auto":
         return LightnessAgent(models[model], model, user="defaults")
+    if name == "mw" or name.startswith("mw:"):
+        features = [f for f in name.partition(":")[2].split(",") if f]
+        try:
+            return MiddlewareAgent(model, features)
+        except ValueError as e:
+            raise typer.BadParameter(str(e)) from None
     raise typer.BadParameter(f"unknown agent {name}")
 
 

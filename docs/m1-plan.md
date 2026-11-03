@@ -1,7 +1,94 @@
 # M1 plan: spec workshop + guarded loop core
 
-Status: draft for review, 2026-11-02. Builds on [design.md](design.md) v0.2 and the
+Status: **revised 2026-11-03** (see the next section); the original plan below is kept for
+the parts that still apply. Builds on [design.md](design.md) v0.2 and the
 [M0 diagnostic](research/m0-bare-diagnostic.md).
+
+## Revision, 2026-11-03: middleware on the bare loop
+
+### Why
+
+The guarded loop (work item 5) scored 0/8 on the dev tasks with the 35B, against 2/8 for the
+bare agent. It was also 3–5× slower and wrote 3–5× more output tokens.
+
+| | bare (3 runs) | guarded loop |
+|---|---|---|
+| Wall time per task | 2–4 min (14 min worst case) | 9–21 min |
+| Model calls per task | 20–40 | 80–100 |
+| Output tokens per task | 6–38K | 26–70K |
+| Hidden tests passed | ahead on 6 of 8 tasks | ahead on 1 of 8 |
+
+Where the guarded loop's model time went: choosing the next action 38%, symbol edits 23%,
+whole-file writes 12%, planning and re-planning 12%, workshop and probes 12%.
+
+The causes came from the design, not from the model:
+
+1. **No memory of its own actions.** Context rebuilt every turn showed only the last 3 results.
+   On md-notes-search the model edited `Note` 5 times, re-read `parse_note` 7 times, and never
+   wrote the CLI it was asked for. The trajectory analysis had found no degradation below
+   ~32K tokens, so the transcript was removed to fix a problem these tasks mostly don't have.
+2. **No feedback from running the program.** The bare agent writes the program, makes sample
+   data and runs it (~30 times on md-notes-search). The loop's edits came back "checks passed
+   (no related tests yet)", so it polished one helper module for 50 turns.
+3. **Two calls per change, and a poor prompt-cache hit rate.** One call picks the action and
+   another writes the code. The rebuilt prompt changes near the top, so only 34% of it hit the
+   prefix cache; the bare agent's append-only transcript hits almost entirely.
+4. **Optional bookkeeping gets skipped.** `done_step` was voluntary; 6 plan steps were closed
+   across 8 tasks (the same lesson as `ask_user` in `bare-ask`).
+5. **Scaffolding pushed the model toward over-built structure** (a `core/` package with
+   symbol-level edits where one 200-line file was enough).
+
+### New approach
+
+Start from the bare agent's loop: one `bash` tool, full transcript, mini-swe-agent's prompt.
+Add lightness as **middleware**: hooks around that loop, each switchable, each measured
+against the bare baseline. Keep only what pays for itself. Code: `src/lightness/agent/`
+(`loop.py`, `middleware.py`), bench agent `mw[:feature,...]`.
+
+**Phase A — match, then beat, the bare agent on quality.** Target the M0 failure causes:
+
+| Middleware | Hook | M0 failure it targets |
+|---|---|---|
+| `workshop` | start: questions → spec appended to the task | 4/8 tasks failed only on unstated preferences |
+| `checks` | after a command changes `.py` files: static checks (check-only, never reformats) + test status with newly broken tests | real bugs unnoticed; regressions |
+| `gate` | on submit: run tests + spec contract probes; refuse at most twice | self-confirming verification |
+| `repeat` | same command again with no file change → note | repeat-after-failure above 32K |
+| `compact` | above 24K prompt tokens: shorten old outputs in one sweep | context growth on long tasks |
+
+Runs: `mw` with no middleware (should match `bare`; checks the loop itself), then the full
+set, then each piece removed one at a time. A full 8-task bare-shaped run takes ~30–40 min.
+
+**Phase B — fewer output tokens and fewer decisions.** Once Phase A is at least level with
+bare, make the same work cheaper. Measure output tokens, model calls, and wall time per passed
+task. Candidates, from what the bare traces spend tokens and turns on:
+
+- **Targeted edits instead of whole-file rewrites.** The bare agent rewrote `notes.py` from
+  scratch 3 times. A `str_replace`-style edit (exact old text → new text, not a diff), with
+  the harness repairing whitespace and ambiguity, cuts output on every fix.
+- **The harness runs the program.** After a write, run the spec's example invocations and
+  probes and append what they printed. Saves the many "run it again" turns.
+- **The harness makes sample data from the spec.** The bare agent spent ~6 commands creating
+  sample notes before it could run anything.
+- **Batched observations.** Static checks, test status and probe results arrive in one
+  observation, so the model doesn't spend a turn asking for each.
+- **Offer submit once everything passes.** 37% of M0 turns re-verified after all was green.
+- **Budgeted thinking.** Measure the reasoning share of output tokens per turn; cap it where
+  it doesn't change outcomes.
+- **Library cheat sheets** (K-track) injected when an import is detected, so fewer
+  try-and-fail cycles on APIs like Textual's.
+
+**Phase C — small models.** Run the best Phase B configuration on Qwen3.5-9B. If the free bash
+loop fails there, the guarded loop (constrained menu, `src/lightness/loop/`) comes back as the
+fallback for that model size, with the transcript restored.
+
+### What changes in the rest of this plan
+
+- Work item 5 (loop core) is superseded by the middleware loop. Its pieces that still apply
+  (atomic edits, regression revert, contract probes, test lint) become middleware candidates.
+- Evaluation conditions: `bare`, `mw`, `mw:<full>`, leave-one-out ablations; then
+  `bare-ask` and the held-out tasks once Phase A is level with bare on the dev set.
+- Exit criterion 4 becomes "median output tokens and wall time per passed task below
+  `bare`'s", on both the 35B and the 27B.
 
 ## Goal
 

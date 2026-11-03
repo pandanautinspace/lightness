@@ -189,3 +189,50 @@ class LightnessAgent:
         res.format_errors = sum(1 for r in agent_rows if r["purpose"].endswith(":retry"))
         res.extra["questions"] = [{"q": e.question, "a": e.answer.text, "covered": e.answer.covered} for e in user.log]
         return res
+
+
+class MiddlewareAgent:
+    """The bare agent's loop with lightness middleware switched on by name (mw:checks,gate,...)."""
+
+    FEATURES = ("workshop", "checks", "gate", "repeat", "compact")
+
+    def __init__(self, model_name: str, features: list[str], step_limit: int = 100):
+        unknown = set(features) - set(self.FEATURES)
+        if unknown:
+            raise ValueError(f"unknown middleware {sorted(unknown)}; choose from {self.FEATURES}")
+        self.model_name, self.features, self.step_limit = model_name, features, step_limit
+        self.name = "mw" + ("-" + ".".join(features) if features else "")
+
+    def run(self, task: Task, ws: Path, log_dir: Path) -> AgentResult:
+        import json
+
+        from lightness.agent import middleware as mw
+        from lightness.agent.loop import TranscriptAgent
+
+        calls = log_dir / "calls.jsonl"
+        client = Client.from_registry(self.model_name, log_path=calls)
+        user = SimulatedUser(client, task.intent)
+        build = {"workshop": lambda: mw.Workshop(user), "checks": mw.Checks, "gate": mw.SubmitGate,
+                 "repeat": mw.RepeatGuard, "compact": mw.Compaction}
+        middleware = [build[f]() for f in self.FEATURES if f in self.features]  # fixed order: workshop first
+        env = os.environ | bench_env() | sandbox.sandbox_env(log_dir) | {
+            "PAGER": "cat", "MANPAGER": "cat", "LESS": "-R", "PIP_PROGRESS_BAR": "off", "TQDM_DISABLE": "1"}
+        agent = TranscriptAgent(client, ws, log_dir, env, middleware=middleware, step_limit=self.step_limit,
+                                wall_limit=task.agent_timeout_sec)
+        start = time.time()
+        try:
+            status = agent.run(task.instruction).status
+        except Exception as e:  # keep the run; the verifier still grades whatever was written
+            import traceback
+            (log_dir / "crash.txt").write_text(traceback.format_exc())
+            status = f"Crashed:{type(e).__name__}"
+        res = AgentResult(status, time.time() - start)
+        rows = [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []
+        agent_rows = [r for r in rows if r["purpose"] not in ("simuser",)]
+        res.model_calls = len(agent_rows)
+        res.prompt_tokens = sum(r.get("prompt_tokens") or 0 for r in agent_rows)
+        res.completion_tokens = sum(r.get("completion_tokens") or 0 for r in agent_rows)
+        events = log_dir / "events.jsonl"
+        res.format_errors = events.read_text().count('"format_error"') if events.exists() else 0
+        res.extra["questions"] = [{"q": e.question, "a": e.answer.text, "covered": e.answer.covered} for e in user.log]
+        return res

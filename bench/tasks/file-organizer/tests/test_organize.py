@@ -70,7 +70,9 @@ def test_same_type_goes_together_different_types_apart(downloads):
 
 def test_json_plan_matches_what_apply_does(downloads):
     plan = plan_json(downloads)
-    assert {p["src"] for p in plan} == set(FILES)
+    srcs = {p["src"] for p in plan}
+    assert set(FILES) <= srcs  # hidden files are an intent detail, so they may or may not appear
+    assert not any(s.startswith("old_project") for s in srcs)
     organize(downloads, "--apply")
     for p in plan:
         assert (downloads / p["dst"]).exists()
@@ -94,10 +96,14 @@ def test_second_run_does_nothing(downloads):
     assert snapshot(downloads) == before
 
 
-def test_leaves_hidden_files_and_subfolders(downloads):
+def test_leaves_existing_subfolders(downloads):
+    organize(downloads, "--apply")
+    assert (downloads / "old_project" / "readme.md").read_text() == "keep me"
+
+
+def test_intent_leaves_hidden_files(downloads):
     organize(downloads, "--apply")
     assert (downloads / ".DS_Store").read_text() == "hidden"
-    assert (downloads / "old_project" / "readme.md").read_text() == "keep me"
 
 
 def test_intent_category_folder_names(downloads):

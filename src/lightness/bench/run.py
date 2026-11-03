@@ -40,7 +40,7 @@ def make_agent(name: str, model: str | None):
 
 def verify(task: Task, ws: Path, run_dir: Path) -> dict:
     """Run hidden tests against a scratch copy of the workspace. Agent never sees tests/."""
-    vdir = run_dir / "verify"
+    vdir = run_dir.resolve() / "verify"
     vws = vdir / "workspace"
     shutil.copytree(ws, vws)
     shutil.copytree(task.tests, vdir / "tests")

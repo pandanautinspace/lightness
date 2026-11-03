@@ -42,6 +42,8 @@ class Caps:
     thinking_budget_field: str | None = "thinking_budget_tokens"
     # Added to every max_tokens, for models that always reason and count it as output (GPT-5).
     reasoning_reserve: int = 0
+    # The endpoint's output limit; larger requests are clamped to it (0 = no limit).
+    max_output: int = 0
 
 
 @dataclass
@@ -79,6 +81,9 @@ class Client:
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self.http = httpx.Client(base_url=base_url.rstrip("/"), timeout=timeout, transport=transport, headers=headers)
 
+    def _clamp(self, max_tokens: int) -> int:
+        return min(max_tokens, self.caps.max_output) if self.caps.max_output else max_tokens
+
     @classmethod
     def from_registry(cls, name: str, **kwargs) -> "Client":
         """Build a client from an entry in models.toml."""
@@ -101,7 +106,7 @@ class Client:
         tools: list[dict] | None = None,
     ) -> Reply:
         body: dict[str, Any] = {"model": self.model, "messages": messages,
-                                "max_tokens": max_tokens + self.caps.reasoning_reserve, **self.sampling}
+                                "max_tokens": self._clamp(max_tokens + self.caps.reasoning_reserve), **self.sampling}
         if tools:
             body["tools"] = tools
         if temperature is not None:
@@ -115,7 +120,7 @@ class Client:
         if thinking is not True and thinking and self.caps.thinking_budget_field:
             body[self.caps.thinking_budget_field] = int(thinking)
             # Thinking cut short by the budget spills into the answer; leave room for it.
-            body["max_tokens"] = max_tokens + int(thinking)
+            body["max_tokens"] = self._clamp(max_tokens + int(thinking))
 
         start = time.time()
         try:

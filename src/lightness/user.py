@@ -114,10 +114,10 @@ SIMUSER_SCHEMA = {
 
 REVIEW_SYSTEM = """You are role-playing a user who asked a coding assistant to build something.
 Your private preferences are listed below. The assistant shows you numbered statements from its
-draft spec. For each statement your preferences contradict, or state more specifically, give a
-one-sentence correction that fixes only what that statement says, with your exact preference.
-Do not add anything the statement does not mention, even if it is related. Skip statements your
-preferences don't address.
+draft spec. Classify every statement:
+- agrees: your preferences say the same thing, or are consistent with it.
+- contradicts: your preferences say something different about exactly what the statement says.
+- not_addressed: your preferences don't say anything about it.
 
 Your private preferences:
 {intent}"""
@@ -125,20 +125,20 @@ Your private preferences:
 REVIEW_SCHEMA = {
     "type": "object",
     "properties": {
-        "corrections": {
+        "verdicts": {
             "type": "array",
             "items": {
                 "type": "object",
                 "properties": {
                     "item": {"type": "integer"},
-                    "correction": {"type": "string"},
+                    "verdict": {"enum": ["agrees", "contradicts", "not_addressed"]},
                 },
-                "required": ["item", "correction"],
+                "required": ["item", "verdict"],
                 "additionalProperties": False,
             },
         }
     },
-    "required": ["corrections"],
+    "required": ["verdicts"],
     "additionalProperties": False,
 }
 
@@ -151,7 +151,7 @@ class SimulatedUser:
     intent: str
     log: list[Exchange] = field(default_factory=list)
 
-    def ask(self, question, options=None, default=None):
+    def _answer(self, question, options=None):
         q = question + ("\nOptions: " + " | ".join(options) if options else "")
         reply = self.client.decide(
             [
@@ -166,17 +166,18 @@ class SimulatedUser:
             max_tokens=300,
             temperature=0,
         )
-        covered = bool(reply.parsed["covered"])
-        text = (
-            reply.parsed["answer"]
-            if covered
-            else (default or "No preference, use your judgement.")
-        )
+        return bool(reply.parsed["covered"]), reply.parsed["answer"]
+
+    def ask(self, question, options=None, default=None):
+        covered, text = self._answer(question, options)
+        if not covered:
+            text = default or "No preference, use your judgement."
         answer = Answer(text, "simulated", covered=covered)
         self.log.append(Exchange(question, options, default, answer))
         return answer
 
     def review(self, statements):
+        """Classify each statement; ask for a fix only for contradicted ones (single-question path)."""
         listing = "\n".join(f"{i}. {st}" for i, st in enumerate(statements, 1))
         reply = self.client.decide(
             [
@@ -189,9 +190,14 @@ class SimulatedUser:
             temperature=0,
         )
         out = {}
-        for c in reply.parsed["corrections"]:
-            if 1 <= c["item"] <= len(statements) and c["correction"].strip():
-                out[c["item"] - 1] = c["correction"].strip()
+        for v in reply.parsed["verdicts"]:
+            i = v["item"] - 1
+            if v["verdict"] == "contradicts" and 0 <= i < len(statements):
+                covered, text = self._answer(
+                    f'Your draft says: "{statements[i]}" What should it say instead?'
+                )
+                if covered:
+                    out[i] = text
         self.log.append(
             Exchange(
                 "(review of draft spec)",

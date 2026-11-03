@@ -50,9 +50,17 @@ def main(model: str) -> int:
     failures += not ok
     print(f"{'ok  ' if ok else 'LEAK'} review/unrelated statements -> {fixes}")
     fixes = user.review(["Images go to a folder named 'Pictures'.", "The tool prints a summary line at the end."])
-    ok = list(fixes) == [0] and "images" in fixes[0].lower() and "screenshot" not in fixes[0].lower()
+    # A full answer about where images go may include the Screenshots exception: same topic.
+    ok = list(fixes) == [0] and "images" in fixes[0].lower()
     failures += not ok
     print(f"{'ok  ' if ok else 'BAD '} review/contradicted statement -> {fixes}")
+    # Statements that agree with the preferences must not come back as "corrections".
+    user = SimulatedUser(client, load_task("json-to-sqlite").intent)
+    fixes = user.review(["Shipping costs are excluded from revenue.", "Country codes are reported uppercase.",
+                         "ingest.py loads the dump into SQLite.", "New SKUs create product records automatically."])
+    ok = not fixes
+    failures += not ok
+    print(f"{'ok  ' if ok else 'BAD '} review/agreeing statements -> {fixes}")
     print(f"\n{failures} problem(s)")
     return 1 if failures else 0
 

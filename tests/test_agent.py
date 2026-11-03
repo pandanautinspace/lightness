@@ -160,7 +160,10 @@ def test_kit_writes_shell_and_reports_start_changes(ws):
     task = "Make a notes app. Contract: notes.py defines NotesApp(data_path)."
     TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit()], step_limit=5).run(task)
     first_user = client.seen[0][1]["content"]
-    assert "I created `notes.py`" in first_user and "### Part `headless_test`" in first_user
+    assert "I created `notes.py`" in first_user and "## Trying the app" in first_user
+    assert "### Part `headless_test`" not in first_user
+    config = json.loads((ws / ".lightness" / "kit" / "try_app.json").read_text())
+    assert config["module"] == "notes" and (ws / ".lightness" / "kit" / "try_app.py").exists()
     assert "### Part `list_actions`" in first_user and "### Part `modal`" not in first_user
     assert (ws / ".lightness" / "kit" / "parts" / "modal.py").exists()
     outs = tool_outputs(client)

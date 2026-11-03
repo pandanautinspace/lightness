@@ -60,7 +60,8 @@ def test_decide_parses_and_sends_schema(tmp_path):
     transport, seen = fake_server('{"action": "read"}')
     reply = make_client(transport, tmp_path).decide([{"role": "user", "content": "q"}], SCHEMA, purpose="act")
     assert reply.parsed == {"action": "read"}
-    assert seen[0]["response_format"]["json_schema"]["schema"] == SCHEMA
+    sent = seen[0]["response_format"]["json_schema"]["schema"]
+    assert sent["properties"]["action"] == {"enum": ["read", "done"], "type": "string"}  # strict mode wants a type
 
 
 def test_decide_retries_once_then_succeeds(tmp_path):

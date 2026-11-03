@@ -102,6 +102,13 @@ def _write_files(files: list[dict], tmp: Path) -> None:
         p.write_text(f["content"])
 
 
+def _script_args(args: list[str]) -> list[str]:
+    """Probes run `python <args>`; drop a leading interpreter the model wrote anyway."""
+    if args and Path(args[0]).name in ("python", "python3", "python3.12"):
+        return args[1:]
+    return args
+
+
 def _py(args: list[str], ws: Path, run_dir: Path | None, timeout: int = 60) -> subprocess.CompletedProcess:
     cmd = [str(BIN / "python"), *args]
     env = None
@@ -129,7 +136,7 @@ def _tmpdir(run_dir: Path | None) -> Path:
 def run_cli(p: dict, ws: Path, run_dir: Path | None) -> ProbeResult:
     tmp = _tmpdir(run_dir)
     _write_files(p["setup_files"], tmp)
-    proc = _py([_subst(a, tmp) for a in p["args"]], ws, run_dir)
+    proc = _py(_script_args([_subst(a, tmp) for a in p["args"]]), ws, run_dir)
     if proc.returncode != p["expect_exit"]:
         return ProbeResult(p["description"], False,
                            f"exit code {proc.returncode}, expected {p['expect_exit']}\n{_tail(proc.stderr or proc.stdout)}")
@@ -155,7 +162,7 @@ class _Ids(HTMLParser):
 def run_http(p: dict, ws: Path, run_dir: Path | None) -> ProbeResult:
     tmp = _tmpdir(run_dir)
     try:
-        with running([_subst(a, tmp) for a in p["start"]], ws, run_dir=run_dir) as srv:
+        with running(_script_args([_subst(a, tmp) for a in p["start"]]), ws, run_dir=run_dir) as srv:
             for r in p["requests"]:
                 kwargs = {}
                 if r["form_json"]:
@@ -189,7 +196,7 @@ _FUNC_SNIPPET = textwrap.dedent("""
     args = json.loads({args!r}) if {args!r} else None
     if args is None:
         print("OK none"); sys.exit(0)
-    out = fn(*args)
+    out = fn(*(args if isinstance(args, list) else [args]))
     kind = type(out).__name__
     first = out[0] if isinstance(out, (list, tuple)) and out else None
     print("OK", kind, len(first) if isinstance(first, (list, tuple)) else -1, repr(out)[:300])
@@ -227,7 +234,8 @@ _TUI_SNIPPET = textwrap.dedent("""
     sys.path.insert(0, ".")
     mod = importlib.import_module({module!r})
     App = getattr(mod, {cls!r})
-    app = App(*json.loads({args!r} or "[]"))
+    init = json.loads({args!r} or "[]")
+    app = App(*(init if isinstance(init, list) else [init]))
     async def main():
         async with app.run_test() as pilot:
             await pilot.pause()

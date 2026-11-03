@@ -3,6 +3,7 @@ against the bare baseline; keep only what helps.
 """
 
 import hashlib
+import json
 from pathlib import Path
 
 from lightness.agent.loop import Ctx, Middleware
@@ -101,6 +102,7 @@ class SubmitGate(Middleware):
                                                    PROBE_SCHEMA, purpose="probes", max_tokens=3000).parsed["probes"]
         except DecisionError:
             ctx.data["probes"] = []
+        (ctx.run_dir / "probes.json").write_text(json.dumps(ctx.data["probes"], indent=1))  # for auditing refusals
         return None
 
     def on_submit(self, ctx: Ctx) -> str | None:

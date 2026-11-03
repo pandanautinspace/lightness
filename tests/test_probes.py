@@ -161,3 +161,21 @@ def test_summary_and_malformed_probe(ws):
     assert not results[0].ok and "probe error" in results[0].detail
     assert "Contract probe failed" in summarize(results)
     assert summarize([]) == "All 0 contract probes passed."
+
+
+def test_cli_args_with_interpreter_still_run(ws):
+    write(ws, "tool.py", "import json, sys, os\nprint(json.dumps(sorted(os.listdir(sys.argv[1]))))\n")
+    assert one([CLI | {"args": ["python", *CLI["args"]]}], ws)[0].ok
+
+
+def test_tui_single_init_arg_not_spread(ws):
+    write(ws, "todo.py", TUI_APP.format(focus="pass"))
+    r = one([TUI | {"init_args_json": '"{tmp}/todos.json"'}], ws)[0]
+    assert r.ok, r.detail
+
+
+def test_tui_stylesheet_error_is_caught(ws):
+    # The textual-todo failure in the middleware runs: invalid CSS crashes the app on start.
+    app = TUI_APP.format(focus="pass").replace("class TodoApp(App):", 'class TodoApp(App):\n        CSS = "--highlighted {\\n color: red; }"')
+    write(ws, "todo.py", app)
+    assert not one([TUI], ws)[0].ok

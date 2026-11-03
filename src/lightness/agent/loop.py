@@ -164,7 +164,8 @@ def observation(output: dict) -> str:
 def run_command(command: str, ctx: Ctx, timeout: int = 120) -> dict:
     try:
         proc = subprocess.run(sandbox.wrap_shell(command, ctx.run_dir), shell=True, cwd=ctx.ws, env=ctx.env,
-                              capture_output=True, text=True, timeout=timeout, check=False)
+                              capture_output=True, text=True, errors="replace", timeout=timeout,
+                              check=False)
         return {"output": proc.stdout + proc.stderr, "returncode": proc.returncode}
     except subprocess.TimeoutExpired as e:
         out = e.stdout.decode(errors="replace") if isinstance(e.stdout, bytes) else (e.stdout or "")

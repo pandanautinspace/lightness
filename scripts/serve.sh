@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Launch llama-server for one of the bench models. Only one fits in memory at a time.
-# Usage: scripts/serve.sh qwen27|qwen35a3 [extra llama-server args...]
+# Usage: scripts/serve.sh qwen27|qwen35a3|qwen9 [extra llama-server args...]
+# qwen9 is small enough to run beside another model: it defaults to port 8081.
 set -euo pipefail
 M=${MODELS_DIR:-$HOME/models}
 name=${1:?model name}; shift
@@ -10,6 +11,10 @@ case "$name" in
     ;;
   qwen35a3)
     args=(-m "$M/Qwen3.6-35B-A3B-UD-Q5_K_M.gguf")
+    ;;
+  qwen9)
+    args=(-m "$M/Qwen3.5-9B-Q6_K.gguf")
+    PORT=${PORT:-8081}
     ;;
   *) echo "unknown model $name" >&2; exit 1 ;;
 esac

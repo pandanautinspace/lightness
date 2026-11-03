@@ -16,3 +16,10 @@ model = "qwen35a3"
 context = 65536
 mode = "strict"
 caps = { json_schema = true, thinking_toggle = true, thinking_budget_field = "thinking_budget_tokens" }
+
+[qwen9]
+base_url = "http://127.0.0.1:8081/v1"
+model = "qwen9"
+context = 65536
+mode = "strict"
+caps = { json_schema = true, thinking_toggle = true, thinking_budget_field = "thinking_budget_tokens" }

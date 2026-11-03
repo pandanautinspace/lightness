@@ -208,6 +208,9 @@ class TranscriptAgent:
             except ContextOverflow:
                 return self._end(ctx, "ContextOverflow", False)
             ctx.last_prompt_tokens = reply.usage.get("prompt_tokens") or 0
+            if reply.reasoning:  # kept out of the transcript, saved for failure analysis
+                with (self.run_dir / "reasoning.jsonl").open("a") as f:
+                    f.write(json.dumps({"step": ctx.step, "reasoning": reply.reasoning}) + "\n")
             ctx.messages.append(self._assistant(reply))
             calls = [c for c in reply.tool_calls if c.get("function", {}).get("name") == "bash"]
             if not calls:

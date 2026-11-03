@@ -113,7 +113,7 @@ def test_replace_accepts_indented_input_and_adds_imports():
 
 
 def test_replace_rejects_wrong_name_and_bad_code():
-    with pytest.raises(SymbolError, match="expected 'parse'"):
+    with pytest.raises(SymbolError, match="must define 'parse'"):
         replace_symbol(SRC, "parse", "def other():\n    pass\n")
     with pytest.raises(SymbolError, match="does not parse"):
         replace_symbol(SRC, "parse", "def parse(:\n")
@@ -130,3 +130,36 @@ def test_insert_at_end_after_and_in_class():
     assert "Store.clear" in list_symbols(out) and "    def clear(self):\n        pass" in out
     with pytest.raises(SymbolError, match="already exists"):
         insert_symbol(SRC, "def parse():\n    pass\n")
+
+
+def test_replace_with_new_helper_inserts_it_after_target():
+    new = "def parse(s):\n    return _clean(s)\n\n\ndef _clean(s):\n    return float(s.strip())\n"
+    out = replace_symbol(SRC, "parse", new)
+    assert list_symbols(out)[:2] == ["parse", "_clean"] and "RATE = 3  # keep me" in out
+
+
+def test_replace_with_existing_helper_replaces_it_in_place():
+    src = SRC + "\n\ndef helper():\n    return 1\n"
+    new = "def parse(s):\n    return helper() + float(s)\n\n\ndef helper():\n    return 2\n"
+    out = replace_symbol(src, "parse", new)
+    assert out.count("def helper") == 1 and "return 2" in out and out.index("def helper") > out.index("class Store")
+
+
+def test_replace_with_constants():
+    new = "RATE = 5\nSEP = ','\n\n\ndef parse(s):\n    return float(s.replace(SEP, ''))\n"
+    out = replace_symbol(SRC, "parse", new)
+    assert "RATE = 5" in out and "RATE = 3" not in out
+    assert out.index("SEP = ','") < out.index("def parse")
+
+
+def test_replace_method_with_sibling_helper():
+    new = "@property\ndef size(self) -> int:\n    return self._count()\n\ndef _count(self):\n    return 0\n"
+    out = replace_symbol(SRC, "Store.size", new)
+    assert "Store._count" in list_symbols(out) and "        return 0" in out
+
+
+def test_replace_rejects_constants_in_method_edit_and_stray_code():
+    with pytest.raises(SymbolError, match="constants"):
+        replace_symbol(SRC, "Store.size", "X = 1\n\n\ndef size(self):\n    return X\n")
+    with pytest.raises(SymbolError, match="only contain"):
+        replace_symbol(SRC, "parse", "def parse(s):\n    return 1\n\n\nprint(parse('x'))\n")

@@ -116,3 +116,24 @@ def test_context_has_spec_plan_and_recent_results(ws):
     second = client.prompts[1]
     assert "greet people" in second and "write greet" in second and "write_file greet.py → ok" in second
     assert "Environment:" in second
+
+
+def test_idle_streak_removes_look_only_actions(ws):
+    client = ScriptedClient([("write_file", "greet.py"), ("read", "greet.py"), ("search", "Hi"),
+                             ("read_symbol", "greet.py::greet")], {"greet.py": [GREET]})
+    h = Harness(client, ws, DefaultsUser(), run_dir=ws.parent)
+    st = h.setup("make a greeter")
+    for _ in range(4):
+        h.turn(st)
+    menu = h.menu(st)
+    assert st.idle == 3 and not {"read", "read_symbol", "search", "test", "probe", "run"} & set(menu)
+    assert "edit_symbol" in menu and "write_file" in menu
+    assert st.working == ["greet.py::greet"]
+
+
+def test_step_turn_budget_forces_revision(ws):
+    client = ScriptedClient([], {})
+    h = Harness(client, ws, DefaultsUser(), run_dir=ws.parent)
+    st = h.setup("make a greeter")
+    st.current.turns = 16
+    assert set(h.menu(st)) <= {"revise_plan", "ask_user"}

@@ -15,6 +15,7 @@ class Step:
     check: str
     status: str = "todo"  # todo | done | failed
     attempts: int = 0  # failed verifications on this step
+    turns: int = 0  # turns spent while this was the current step
 
 
 @dataclass
@@ -37,6 +38,8 @@ class RunState:
     facts: list[str] = field(default_factory=list)
     tried: list[str] = field(default_factory=list)  # one line per abandoned attempt on the current step
     turn: int = 0
+    idle: int = 0  # consecutive look-only actions (read/search/test/probe/run) since the last write
+    working: list[str] = field(default_factory=list)  # recently read FILE::SYMBOL, shown in full each turn
     last_change_turn: int = 0
     green_since: int | None = None  # turn at which everything last passed with no change since
     finished: bool = False

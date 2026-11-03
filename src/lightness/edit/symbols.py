@@ -116,17 +116,79 @@ def _add_imports(source: str, imports: list[str]) -> str:
     return "".join(lines[:insert_at] + new + lines[insert_at:])
 
 
+def _parse_new(new_code: str):
+    code = textwrap.dedent(new_code).strip("\n") + "\n"
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as e:
+        raise SymbolError(f"new code does not parse: line {e.lineno}: {e.msg}") from None
+    return code, tree
+
+
+def _segment(code: str, node: ast.AST) -> str:
+    start, end = _span(node) if hasattr(node, "decorator_list") else (node.lineno - 1, node.end_lineno)
+    return "\n".join(code.splitlines()[start:end]) + "\n"
+
+
+def _assigned_names(node: ast.AST) -> set[str]:
+    targets = node.targets if isinstance(node, ast.Assign) else [getattr(node, "target", None)]
+    return {t.id for t in targets if isinstance(t, ast.Name)}
+
+
 def replace_symbol(source: str, name: str, new_code: str) -> str:
-    """Replace symbol `name` (e.g. "parse" or "Store.add") with the def/class in `new_code`."""
+    """Replace symbol `name` (e.g. "parse" or "Store.add") with its new definition in `new_code`.
+
+    Small models often return helpers along with the target, so `new_code` may also contain:
+    imports (added at the top), other functions/classes (replace same-named ones in the same
+    scope, otherwise inserted right after the target), and, for top-level targets, module-level
+    assignments (replace same-named ones, otherwise inserted before the target).
+    """
+    _find(source, name)  # fail early with the list of available symbols
+    code, tree = _parse_new(new_code)
+    leaf = name.split(".")[-1]
+    scope = name.rsplit(".", 1)[0] + "." if "." in name else ""
+    defs = [n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
+    target = next((d for d in defs if d.name == leaf), None)
+    if target is None:
+        found = ", ".join(d.name for d in defs) or "nothing"
+        raise SymbolError(f"new code must define {leaf!r} (it defines {found})")
+    imports = [ast.get_source_segment(code, n) for n in tree.body if isinstance(n, (ast.Import, ast.ImportFrom))]
+    assigns = [n for n in tree.body if isinstance(n, (ast.Assign, ast.AnnAssign))]
+    other = [n for n in tree.body if n not in defs and n not in assigns
+             and not isinstance(n, (ast.Import, ast.ImportFrom))
+             and not (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant))]  # stray docstrings
+    if other:
+        raise SymbolError("new code may only contain imports, definitions and constants")
+    if assigns and scope:
+        raise SymbolError("module-level constants can't be added while editing a method")
+
+    existing = set(list_symbols(source))
+    extras_new = [d for d in defs if d is not target and f"{scope}{d.name}" not in existing]
+    extras_old = [d for d in defs if d is not target and f"{scope}{d.name}" in existing]
+
+    # 1. the target plus brand-new helpers, in place of the old target
     _, node = _find(source, name)
-    imports, new_node, body = _split_new_code(new_code)
-    if new_node.name != name.split(".")[-1]:
-        raise SymbolError(f"new code defines {new_node.name!r}, expected {name.split('.')[-1]!r}")
+    block = _segment(code, target) + "".join("\n\n" + _segment(code, d) for d in extras_new)
     lines = source.splitlines(keepends=True)
     start, end = _span(node)
-    indent = " " * node.col_offset
-    replacement = textwrap.indent(body, indent, lambda line: line.strip() != "")
-    result = "".join(lines[:start]) + replacement + "".join(lines[end:])
+    result = "".join(lines[:start]) + textwrap.indent(block, " " * node.col_offset, lambda l: l.strip() != "") \
+        + "".join(lines[end:])
+    # 2. helpers that already exist are replaced where they are
+    for d in extras_old:
+        result = replace_symbol(result, f"{scope}{d.name}", _segment(code, d))
+    # 3. constants: replace same-named module-level assignments, else insert before the target
+    for a in assigns:
+        names = _assigned_names(a)
+        mod = ast.parse(result)
+        old = next((n for n in mod.body if isinstance(n, (ast.Assign, ast.AnnAssign)) and _assigned_names(n) & names), None)
+        rl = result.splitlines(keepends=True)
+        seg = _segment(code, a)
+        if old is not None:
+            result = "".join(rl[:old.lineno - 1]) + seg + "".join(rl[old.end_lineno:])
+        else:
+            tnode = _find(result, name)[1]
+            at = _span(tnode)[0]
+            result = "".join(rl[:at]) + seg + "\n\n" + "".join(rl[at:])
     ast.parse(result)
     return _add_imports(result, imports)
 

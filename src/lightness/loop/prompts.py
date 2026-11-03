@@ -7,7 +7,7 @@ budget, roughly 4 characters per token.
 import json
 from pathlib import Path
 
-from lightness.edit.symbols import outline
+from lightness.edit.symbols import get_symbol, outline
 from lightness.loop.state import RunState
 from lightness.spec.workshop import Spec, render
 
@@ -48,9 +48,11 @@ Current files:
 {tree or "(empty directory)"}
 
 Rules:
-- Order: core logic first (pure functions, no I/O), then tests for the acceptance criteria, then the
-  user-facing shell (CLI / web routes / TUI), then a final check against the whole spec.
-- For changes to existing code: find the code involved, change it, then add tests for the change.
+- New projects: core logic first (pure functions, no I/O), then the user-facing shell (CLI / web
+  routes / TUI) that the contract describes, then tests for the acceptance criteria that exercise
+  the real program, then a final check against the whole spec.
+- Changes to existing code: at most 3 steps. Make the change in the existing code, add or extend a
+  test that proves it, then a final check. Don't restructure code the change doesn't need.
 - Keep modules small; separate logic from I/O so it can be tested directly.
 - files: the files each step creates or changes (relative paths). Test files are named test_*.py.
 - check: how we'll know the step worked (which tests pass, which command runs)."""
@@ -102,6 +104,14 @@ def turn_prompt(st: RunState, ws: Path, menu_doc: str) -> str:
             p = ws / f
             if p.exists() and f in st.files_read:
                 parts += ["", f"## {f}", "```", _outline_or_body(p), "```"]
+    if st.working:
+        parts += ["", "## Working set (current code)"]
+        for w in st.working:
+            f, name = w.split("::", 1)
+            try:
+                parts += [f"### {w}", "```python", get_symbol((ws / f).read_text(), name).rstrip(), "```"]
+            except Exception:
+                pass
     if st.facts:
         parts += ["", "## Learned facts", *[f"- {x}" for x in st.facts[-8:]]]
     if st.tried:
@@ -111,6 +121,11 @@ def turn_prompt(st: RunState, ws: Path, menu_doc: str) -> str:
         parts += ["", "## Recent results"]
         for o in recent:
             parts += [f"[turn {o.turn}] {o.action} {o.target} → {'ok' if o.ok else 'FAILED'}", o.text[:2500], ""]
+    if st.idle >= 3:
+        parts += ["", "You have looked around enough; the code you need is shown above. Act now: write, edit, or revise the plan."]
+    step_now = st.current
+    if step_now and step_now.turns > 15:
+        parts += ["", f"This step has taken {step_now.turns} turns. Revise the plan (smaller or different steps) or ask the user."]
     parts += ["", "## Your move", menu_doc,
               "Choose the single next action. Keep `why` to one sentence."]
     text = "\n".join(parts)

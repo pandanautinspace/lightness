@@ -22,6 +22,10 @@ from lightness.verify.compress import traceback_summary
 from lightness.verify.probes import PROBE_SCHEMA, run_probes, summarize
 from lightness.verify.testlint import lint_tests
 
+LOOK_ONLY = {"read", "read_symbol", "search", "test", "probe", "run"}
+MAX_IDLE = 3  # look-only actions in a row before only acting is allowed
+STEP_TURNS = 15  # turns on one step before a plan revision is forced
+
 PATH_RE = r"^[A-Za-z0-9_][A-Za-z0-9_./-]*\.(py|txt|md|json|toml|csv|html|css|js|cfg|ini|yaml|yml)$"
 
 ACTION_DOCS = {
@@ -76,8 +80,9 @@ class Harness:
         steps = self.client.decide([{"role": "user", "content": prompt}], prompts.PLAN_SCHEMA,
                                    purpose="plan", reason_budget=1024, max_tokens=2000).parsed["steps"]
         start = max((s.id for s in st.plan), default=0)
+        limit = 3 if st.spec and st.spec.project_type == "repo-change" else 8
         return [Step(start + i + 1, s["goal"], [f for f in s["files"] if re.match(PATH_RE, f)], s["check"])
-                for i, s in enumerate(steps[:8])]
+                for i, s in enumerate(steps[:limit])]
 
     # --- menu ---------------------------------------------------------------------------------
 
@@ -127,8 +132,11 @@ class Harness:
             m["done_step"] = {"const": ""}
         else:
             m["done"] = {"const": ""}
-        if self._looping():
-            for k in ("read", "read_symbol", "search", "run", "test", "probe"):
+        step = st.current
+        if step and step.turns > STEP_TURNS:
+            return {k: v for k, v in m.items() if k in ("revise_plan", "ask_user")} or {"revise_plan": {"const": ""}}
+        if st.idle >= MAX_IDLE or self._looping():
+            for k in LOOK_ONLY:
                 m.pop(k, None)
         return m
 
@@ -173,6 +181,9 @@ class Harness:
             return
         action, target = choice["action"], choice["target"]
         self.recent_actions.append((action, target, st.last_change_turn))
+        if st.current:
+            st.current.turns += 1
+        st.idle = st.idle + 1 if action in LOOK_ONLY else 0
         handler = getattr(self, f"do_{action}")
         ok, text = handler(st, target)
         st.observe(action, target, ok, text)
@@ -204,9 +215,11 @@ class Harness:
     def do_read_symbol(self, st, target):
         f, name = target.split("::", 1)
         try:
-            return True, get_symbol((self.ws / f).read_text(), name)
+            body = get_symbol((self.ws / f).read_text(), name)
         except (SymbolError, OSError) as e:
             return False, str(e)
+        st.working = [w for w in st.working if w != target][-2:] + [target]
+        return True, f"(now shown in full under 'Working set' every turn)\n{body}"[:4000]
 
     def do_search(self, st, target):
         if not target.strip():

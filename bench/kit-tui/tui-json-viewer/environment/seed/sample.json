@@ -1,0 +1,13 @@
+{
+  "service": "inventory",
+  "version": 7,
+  "debug": false,
+  "owner": null,
+  "regions": ["eu-west", "us-east", "ap-south"],
+  "limits": {"requests_per_minute": 600, "burst": 50, "timeout_s": 2.5},
+  "warehouses": [
+    {"id": "W1", "city": "Rotterdam", "bins": 1200, "tags": ["cold", "bulk"]},
+    {"id": "W2", "city": "Zürich", "bins": 300, "tags": []},
+    {"id": "W3", "city": "Osaka", "bins": 950, "manager": {"name": "Aiko", "since": 2019}}
+  ]
+}

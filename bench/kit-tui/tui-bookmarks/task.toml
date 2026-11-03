@@ -1,0 +1,4 @@
+category = "tui"
+difficulty = "hard"
+agent_timeout_sec = 1800
+verify_timeout_sec = 240

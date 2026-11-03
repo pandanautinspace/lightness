@@ -19,6 +19,19 @@ M0 told us where to aim:
 | Transcript grew to 45–55K tokens; 1.8M prompt tokens on one task | Context rebuilt per turn under a hard budget |
 | Whole-file rewrites and long thinking ate the 27B's time | `edit_symbol` for existing code; thinking off by default, budgeted per action |
 
+The [trajectory analysis](research/m0-trajectory-analysis.md) added more, from 573 actions:
+
+| Finding | M1 response |
+|---|---|
+| No measurable degradation up to ~32K tokens. Above that, repeating a just-failed command rose to 10% of turns (n=42) | Keep the 12K per-turn budget; it stays well below the risky zone |
+| **Self-confirming verification** (mocked UI, presence-only asserts, test data shaped like the code) is the main cause of non-intent failures | Harness-run smoke checks, contract probes, linting of model tests (item 4) |
+| Output misread against the contract (✓ on wrong tuple shapes, "works" on SKIP) | Contract probes check the shapes, so the model doesn't have to read them |
+| Invented library APIs (`set_focus("id")`, `Label.text`) | pyright argument-type rules on top of attribute checks |
+| 37% of turns re-verify after everything already passed | Cap after all-green |
+| A leftover background server cost 10 turns and timeouts cost 14 minutes | Process manager in `run` |
+| Forgot a lesson from 46 turns earlier | Learned facts carried in the turn prompt |
+| Wrong beliefs about the environment (paths, `pip install`, `/tmp`) in 14/16 runs | Fixed prefix states the workspace, the installed packages and the temp-dir policy |
+
 ## Scope
 
 **In M1:**
@@ -132,7 +145,13 @@ Each item ends with a check we can run.
    follow-up.
 - Catalog files for M1: `cli`, `data-script`, `webapp`, `tui`, `repo-change`. These hold
   dimensions plus a small set of pattern decisions, e.g. storage (JSON/SQLite) and web stack
-  (Flask + Jinja). No scaffolds yet.
+  (Flask + Jinja). No scaffolds yet, except **known-good test fixtures** per type:
+  - a Textual `run_test()` pilot pattern;
+  - a Flask `test_client` with a temp DB;
+  - a CLI run with `tmp_path`.
+
+  `write_tests` gets the matching fixture, so the model stops debugging its own test setup.
+  That setup cost ~30 turns in textual-todo.
 - *Check:* **intent coverage**, measured offline without writing any code.
   - Run the workshop alone on the 8 tasks with `SimulatedUser`.
   - Score how many `intent.md` bullets appear correctly in the resulting spec. A local judge
@@ -142,26 +161,57 @@ Each item ends with a check we can run.
 
 ### 4. Edit and verify, deterministic and model-free
 
+**Done:** `fences.py`, `symbols.py`, `chain.py` stages 1–4 and `compress.py`, with 41 unit
+tests passing.
+- `symbols.py` uses `ast` line ranges rather than libcst. It's simpler, and the rest of the file
+  stays byte-identical.
+
 - `fences.py`: extract the single code block for a target file. Tolerate chatter, missing
   language tags and nested fences; reject output containing several conflicting blocks.
-- `symbols.py` (libcst):
+- `symbols.py`:
   - outline a file (signatures + docstrings);
   - get a symbol's source;
-  - replace a top-level function or class, or a method, preserving surrounding formatting;
-  - insert a new symbol after a given one.
+  - replace a top-level function or class, or a method;
+  - insert a new symbol.
 - `chain.py`:
   1. `ast.parse`;
   2. `ruff check --fix` and `ruff format`;
-  3. basedpyright, limited to unresolved import/attribute and undefined-name rules;
+  3. basedpyright, limited to unresolved import/attribute, undefined-name and call rules;
   4. tests related to the touched module (test files that import it), then the full suite
      at `done`.
 
   All subprocesses run inside the bench sandbox.
 - `compress.py`: reduce output to the first failing check, the relevant traceback frames in
-  workspace files, the assertion diff, and at most about 40 lines, mapped back to the symbol
-  the model wrote when possible.
+  workspace files, the assertion diff, and at most about 40 lines.
+
+**To add** (from the trajectory analysis):
+- **pyright argument types:** enable `reportArgumentType` for library calls. This catches
+  `set_focus("id")` passing a string where a widget is expected. Watch for false positives on
+  untyped libraries.
+- **Smoke checks, run by the harness, no model.** One per project type, run before `done_step`
+  on any I/O-shell step and before `done`:
+  - TUI: mount the app with `run_test()` and press nothing.
+  - Web: start it via the process manager, `GET /`, then hit each contract route once.
+  - CLI: `--help`, plus one contract invocation on a temp dir.
+
+  This would have caught the textual-todo 0/11 crash and the empty expense list.
+- **Contract probes.** When the spec has a contract (always, for bench tasks), the harness
+  turns it into machine checks:
+  - function exists, with the right arity and return shape (tuple length, dict keys);
+  - CLI flags exist and `--json` output parses;
+  - routes return the stated status codes;
+  - required element ids are in the HTML.
+
+  These are generated once, after the workshop, by a `decide` call that fills a fixed probe
+  schema, not by writing free test code. They catch the `top_products` shape and plan-vs-apply
+  failures.
+- **Lint for model-written tests.** `write_tests` output is rejected, with a reason, if it:
+  - mocks or patches the module under test;
+  - has tests that only assert presence or truthiness;
+  - passes against a stub of the module (each new test must fail when the target functions
+    `raise NotImplementedError`).
 - *Check:* unit tests on fixtures, covering the M0 failure shapes (missing date format,
-  unparsed YAML block list, server not starting).
+  unparsed YAML block list, crashing TUI mount, mocked UI test, wrong tuple shape).
 
 ### 5. Loop core
 
@@ -178,8 +228,17 @@ Each item ends with a check we can run.
   4. working set: file tree with sizes, then for the current step an outline of the target
      files plus full bodies of the symbols in play
   5. last 3 observations
-  6. a one-paragraph "tried so far" summary
+  6. a "tried so far" paragraph plus a short list of **learned facts** (e.g. "a Textual app
+     can't be reused across `run_test` calls"), extracted when a failure is resolved
   7. the ask
+
+  The fixed prefix states the environment plainly:
+  - the working directory is the workspace;
+  - which packages are installed;
+  - no network and no `pip`;
+  - temp files go in `$TMPDIR`.
+
+  M0 runs probed `/testbed`, `/app` and `/home/user` in 14/16 runs.
 - **Menu.** The set of allowed actions and targets depends on state. It is compiled into a
   JSON schema of `anyOf` branches, one per action, with `const` action names and `enum`
   targets. Rules:
@@ -199,6 +258,20 @@ Each item ends with a check we can run.
     `revise_plan`.
   - Turn and token caps, and a wall-clock limit.
   - Assert the prompt fits the server's context.
+  - **Cap after all-green:** once the full suite, smoke checks and probes pass with no file
+    changed since, allow at most 2 more turns, then offer only `done`. 37% of M0 turns were
+    re-verification that never found anything.
+  - **No-op writes are reported:** a write that leaves the file byte-identical returns "no
+    change made" instead of a normal success. M0 had the model say "made it safer" and write
+    an identical file.
+- **Process manager in `run`:**
+  - picks a free port;
+  - starts the process and waits for a health check or a timeout;
+  - captures its output;
+  - always kills it when the action ends.
+
+  The model never backgrounds a process itself. In M0, a leftover server cost 10 turns, and
+  `&`-started servers cost 14 minutes of timeouts.
 - **Thinking policy:** off for routine actions. A budgeted reasoning phase for `plan`,
   `revise_plan`, and action choice after a failure. Budgets start at 1–2K tokens.
 - **`done`:** requires the full test suite and acceptance tests to pass, or an exhausted
@@ -294,7 +367,12 @@ goes there.
   tests.
   - Mitigation: tests derive from spec criteria; the hidden tests are the real judge; check
     the gap between "own tests pass" and "hidden tests pass" in reports.
-- **Per-request thinking control may not work as documented on llama-server.**
+- **The model-test lint or the argument-type rules reject correct code** (false positives on
+  untyped libraries, or legitimate mocks of external services).
+  - Mitigation: lint only mocks of the module under test; log every rejection and review it
+    in the first runs; per-rule switches.
+- **Per-request thinking control may not work as documented on llama-server.** *Resolved:*
+  the probe confirmed `enable_thinking` and `thinking_budget_tokens` both work.
   - Mitigation: the probe in item 1; fall back to separate server launches or prompt-level
     `/no_think`.
 - **Overfitting to the 8 dev tasks.** Mitigation: held-out tasks, written blind.

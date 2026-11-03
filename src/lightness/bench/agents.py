@@ -1,6 +1,7 @@
 """Agents the bench can run. Each takes a workspace + instruction and edits files in place."""
 
 import os
+import shlex
 import shutil
 import time
 from dataclasses import dataclass, field
@@ -8,6 +9,8 @@ from pathlib import Path
 
 from lightness.bench import sandbox
 from lightness.bench.tasks import Task
+from lightness.provider import Client
+from lightness.user import SimulatedUser
 
 
 @dataclass
@@ -52,9 +55,13 @@ class BareAgent:
 
     name = "bare"
 
-    def __init__(self, model: dict, step_limit: int = 100):
+    def __init__(self, model: dict, step_limit: int = 100, ask: bool = False, max_questions: int = 5):
         self.model = model
         self.step_limit = step_limit
+        self.ask = ask
+        self.max_questions = max_questions
+        if ask:
+            self.name = "bare-ask"
 
     def run(self, task: Task, ws: Path, log_dir: Path) -> AgentResult:
         import yaml
@@ -79,9 +86,21 @@ class BareAgent:
                 "cost_tracking": "ignore_errors",
             }
         )
+        user = None
+        instruction = task.instruction
+        if self.ask:
+            user = SimulatedUser(
+                Client(self.model["base_url"], self.model["model"], log_path=log_dir / "calls.jsonl"), task.intent
+            )
+            instruction += ASK_INSTRUCTIONS.format(n=self.max_questions)
+        max_questions = self.max_questions
+
         class SandboxedEnvironment(LocalEnvironment):
             def execute(self, action: dict, cwd: str = "", *, timeout: int | None = None):
-                action = action | {"command": sandbox.wrap_shell(action.get("command", ""), log_dir)}
+                command = action.get("command", "")
+                if user is not None and command.strip().startswith("ask_user"):
+                    return {"output": answer_ask_user(command, user, max_questions), "returncode": 0, "exception_info": ""}
+                action = action | {"command": sandbox.wrap_shell(command, log_dir)}
                 return super().execute(action, cwd, timeout=timeout)
 
         env = SandboxedEnvironment(
@@ -92,7 +111,7 @@ class BareAgent:
         agent = DefaultAgent(model, env, **agent_cfg)
         start = time.time()
         try:
-            info = agent.run(task.instruction)
+            info = agent.run(instruction)
             status = info.get("exit_status", "")
         except Exception as e:  # keep the run; the verifier still grades whatever was written
             status = f"Crashed:{type(e).__name__}"
@@ -105,4 +124,31 @@ class BareAgent:
                 res.completion_tokens += usage.get("completion_tokens") or 0
             if extra.get("interrupt_type") == "FormatError":
                 res.format_errors += 1
+        if user is not None:
+            res.extra["questions"] = [
+                {"q": e.question, "a": e.answer.text, "covered": e.answer.covered} for e in user.log
+            ]
         return res
+
+
+ASK_INSTRUCTIONS = """
+
+## Asking the user
+
+If the request leaves something important unclear, you can ask the user by running
+`ask_user "your question"` as a command. You may ask at most {n} questions; ask only about
+things that change what you build."""
+
+
+def answer_ask_user(command: str, user: SimulatedUser, max_questions: int) -> str:
+    if len(user.log) >= max_questions:
+        return "You have used all your questions. Decide for yourself."
+    rest = command.strip()[len("ask_user"):].strip()
+    try:
+        parts = shlex.split(rest)
+        question = " ".join(parts) if parts else rest
+    except ValueError:
+        question = rest.strip("\"'")
+    if not question:
+        return 'Usage: ask_user "your question"'
+    return user.ask(question).text

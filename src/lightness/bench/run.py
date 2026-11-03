@@ -35,6 +35,8 @@ def make_agent(name: str, model: str | None):
         raise typer.BadParameter(f"--model must be one of {list(models)}")
     if name == "bare":
         return BareAgent(models[model])
+    if name == "bare-ask":
+        return BareAgent(models[model], ask=True)
     raise typer.BadParameter(f"unknown agent {name}")
 
 
@@ -79,7 +81,7 @@ def verify(task: Task, ws: Path, run_dir: Path) -> dict:
 
 @app.command()
 def main(
-    agent: str = typer.Option("oracle", help="oracle | null | bare"),
+    agent: str = typer.Option("oracle", help="oracle | null | bare | bare-ask"),
     model: str = typer.Option(None, help="key in models.toml"),
     tasks: str = typer.Option("all", help="comma-separated task ids, or 'all'"),
     runs: int = typer.Option(1, help="runs per task"),
@@ -112,7 +114,9 @@ def main(
             with results_path.open("a") as f:
                 f.write(json.dumps(row) + "\n")
             mark = "PASS" if v["pass"] else "fail"
+            asked = len(res.extra.get("questions", []))
             typer.echo(f"{mark} {tid}#{i} tests {v['tests_passed']}/{v['tests_total']} "
+                       f"intent {v.get('intent_passed', 0)}/{v.get('intent_total', 0)} asked={asked} "
                        f"status={res.exit_status} calls={res.model_calls} {row['total_sec']}s")
 
     rows = [json.loads(line) for line in results_path.read_text().splitlines()]

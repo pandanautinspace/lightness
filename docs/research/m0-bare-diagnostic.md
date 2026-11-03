@@ -74,6 +74,30 @@ Every run ended by submitting. There were 0 malformed tool calls in 274 turns.
    times and csv-cleaner 8 times. On the 27B, whole-file rewrites plus long thinking blocks were
    most of the 33 minutes. Symbol-level edits and per-action thinking budgets address this.
 
+## bare-ask: is offering a question tool enough?
+
+Same agent, plus an `ask_user "…"` command answered by the simulated user. The prompt gets an
+"Asking the user" section allowing up to 5 questions. Run on the 35B, one run per task.
+
+| Task | bare | bare-ask | Questions asked |
+|---|---|---|---|
+| add-feature | 26/26 | 25/26 | 0 |
+| bugfix | 23/23 | 23/23 | 0 |
+| csv-cleaner | 7/13 | 6/13 | 0 |
+| expense-tracker | 12/14 | 10/14 | 0 |
+| file-organizer | 8/11 | 7/11 | 0 |
+| json-to-sqlite | 8/10 | 7/10 | 0 |
+| md-notes-search | 6/12 | 8/12 | 0 |
+| textual-todo | 9/11 | 0/11 | 0 |
+
+- The agent asked **0 questions on all 8 tasks**, even though the instruction was in its
+  prompt (checked in the trajectory).
+- The differences from `bare` are run-to-run noise. textual-todo 0/11 is a genuine crash:
+  a `str` is passed where Textual expects a widget. The app was never run.
+- **Conclusion:** an optional question tool closes none of the intent gap, because the model
+  doesn't use it. This matches the K0 finding that small models skip optional tools. Asking has
+  to be a structural step (the spec workshop), not a tool the model may choose.
+
 ## Benchmark fixes made because of this run
 
 - **file-organizer:**

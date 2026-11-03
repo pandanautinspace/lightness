@@ -1,4 +1,4 @@
-# lightness — design v0.2
+# lightness (lightning harness) — design v0.2
 
 A coding harness that makes small local models (~10–35B, quantized) useful for real work,
 and makes large models faster and cheaper. Python-first. Biased toward scripts, small apps,

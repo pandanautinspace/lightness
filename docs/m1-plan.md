@@ -186,6 +186,9 @@ Each item ends with a check we can run.
   - `edit_symbol` only lists symbols in files already read.
   - `done` appears only once acceptance tests exist.
   - After 2 failed repairs on a step, only `read`, `ask_user` and `revise_plan` are offered.
+  - A sandboxed `bash` action is always available as an escape hatch, so a capable model is
+    never boxed in. Its use is logged; if a model leans on it heavily, the menu is missing
+    something.
 - **Code-carrying actions** (`write_file`, `edit_symbol`, `write_tests`) make a second,
   unconstrained call that asks for exactly one fenced block. Its context is the step, the spec
   slice and the target outline or body. Thinking is off.
@@ -215,6 +218,12 @@ Each item ends with a check we can run.
 - **Held-out tasks.**
   - Before the M1 evaluation, an agent with no knowledge of the harness writes 6 new tasks
     in the same format: 2 scripts/data, 2 webapp/tui, 2 repo-edit.
+  - M0 suggests the dev tasks are easy for the 35B on functionality, so half of the held-out
+    tasks are a **harder tier**, each with at least one of:
+    - several files;
+    - two or more interacting features;
+    - a 1,500–3,000 LOC seed repo;
+    - a follow-up change request applied to the agent's own first result.
   - Each is checked with oracle and null, and with one `bare` run looked at for fairness
     (the M0 lesson).
   - We don't tune on them.
@@ -236,6 +245,11 @@ Each item ends with a check we can run.
 
 - 35B-A3B: all 4 conditions × 14 tasks (8 dev + 6 held-out) × n=3.
 - 27B: `bare` and `lightness` on the 6 held-out tasks × n=2.
+- **Qwen3.5-9B** (≈6GB at Q5): `bare` and `lightness` on all 14 tasks × n=2. This is where
+  the harness should matter most, and the case that matters for "light" models.
+- **Layer ablation** on the 35B, held-out tasks: `lightness-loose` keeps only the workshop and
+  the verify chain, with a free sandboxed `bash` action instead of the strict menu. It tests
+  whether the strict loop helps a capable model or gets in its way.
 - Paired per-task comparison.
 
 ### 8. Interactive CLI (minimal)
@@ -275,6 +289,12 @@ goes there.
   - Mitigation: the probe in item 1; fall back to separate server launches or prompt-level
     `/no_think`.
 - **Overfitting to the 8 dev tasks.** Mitigation: held-out tasks, written blind.
+- **The harness makes a capable model worse.** M0 showed the 35B writes working code well on
+  its own; strict menus and forced steps add overhead and may cut off good strategies.
+  - Mitigation: the `lightness-auto` vs `bare` exit criterion, the `bash` escape hatch, and
+    the `lightness-loose` ablation.
+  - Every layer can be switched off, so we can keep only the ones that pay for themselves on
+    each model size.
 - **A fixed step order is too rigid for repo-change tasks.** Mitigation: the default plan
   shape is only a suggestion to the plan call; `revise_plan` is always available.
 - **Prompt cache misses from rebuilding context every turn.** Mitigation: keep the prefix,

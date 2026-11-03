@@ -1,7 +1,7 @@
 [project]
 name = "lightness"
 version = "0.1.0"
-description = "A coding harness for small local LLMs"
+description = "lightness — a lightning-fast coding harness for small local LLMs"
 requires-python = ">=3.12"
 dependencies = [
     "flask>=3.1.3",

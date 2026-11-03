@@ -48,21 +48,19 @@ def test_list_actions():
     async def steps(app, pilot):
         from textual.widgets import ListView
         await pilot.click("#new-item")
-        await pilot.press(*"third", "enter")
+        await pilot.press(*"textual.io", "enter")
         await pilot.pause()
         assert app.focused.id == "new-item"
-        assert [i["title"] for i in app.items] == ["first", "second", "third"]
+        assert [i["url"] for i in app.items] == ["example.org", "python.org", "textual.io"]
         app.query_one("#items", ListView).focus()
-        await pilot.press("up", "space")  # highlighted was the new item; up = second
+        await pilot.press("up", "s")  # highlighted was the new item; up = python.org
         await pilot.pause()
-        assert app.items[1]["done"] is True
-        assert labels(app, "#items")[1].startswith("✓")
-        await pilot.press("d")
+        assert app.items[1]["starred"] is True
+        assert labels(app, "#items")[1].startswith("★")
+        await pilot.press("x")
         await pilot.pause()
-        assert [i["title"] for i in app.items] == ["first", "third"]
-        await pilot.press("enter")  # Selected -> toggle the highlighted one
-        await pilot.pause()
-        assert sum(i["done"] for i in app.items) == 1
+        assert [i["url"] for i in app.items] == ["example.org", "textual.io"]
+        assert labels(app, "#items")[1].endswith("textual.io")
 
     drive(mod.ListActionsApp(), steps)
 
@@ -306,10 +304,10 @@ def test_sqlite_store(tmp_path):
     mod = part("sqlite_store")
     store = mod.Store(tmp_path / "x.db")
     a, b = store.add("a"), store.add("b")
-    store.set_done(a, True)
+    store.set_favourite(a, True)
     store.delete(b)
     store.close()
-    assert mod.Store(tmp_path / "x.db").all() == [{"id": a, "title": "a", "done": 1}]
+    assert mod.Store(tmp_path / "x.db").all() == [{"id": a, "name": "a", "favourite": 1}]
 
 
 def test_file_loader(tmp_path):

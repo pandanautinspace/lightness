@@ -12,10 +12,10 @@ import sqlite3
 from pathlib import Path
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS items (
+CREATE TABLE IF NOT EXISTS contacts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    done INTEGER NOT NULL DEFAULT 0
+    name TEXT NOT NULL,
+    favourite INTEGER NOT NULL DEFAULT 0
 )
 """
 
@@ -28,19 +28,19 @@ class Store:
         self.db.commit()
 
     def all(self) -> list[dict]:
-        return [dict(r) for r in self.db.execute("SELECT id, title, done FROM items ORDER BY id")]
+        return [dict(r) for r in self.db.execute("SELECT id, name, favourite FROM contacts ORDER BY id")]
 
-    def add(self, title: str) -> int:
-        cur = self.db.execute("INSERT INTO items (title) VALUES (?)", (title,))
+    def add(self, name: str) -> int:
+        cur = self.db.execute("INSERT INTO contacts (name) VALUES (?)", (name,))
         self.db.commit()
         return cur.lastrowid
 
-    def set_done(self, item_id: int, done: bool) -> None:
-        self.db.execute("UPDATE items SET done = ? WHERE id = ?", (int(done), item_id))
+    def set_favourite(self, contact_id: int, favourite: bool) -> None:
+        self.db.execute("UPDATE contacts SET favourite = ? WHERE id = ?", (int(favourite), contact_id))
         self.db.commit()
 
-    def delete(self, item_id: int) -> None:
-        self.db.execute("DELETE FROM items WHERE id = ?", (item_id,))
+    def delete(self, contact_id: int) -> None:
+        self.db.execute("DELETE FROM contacts WHERE id = ?", (contact_id,))
         self.db.commit()
 
     def close(self) -> None:
@@ -49,5 +49,5 @@ class Store:
 
 if __name__ == "__main__":
     store = Store(":memory:")
-    store.set_done(store.add("example"), True)
+    store.set_favourite(store.add("Ada"), True)
     print(store.all())

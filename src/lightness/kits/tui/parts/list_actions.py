@@ -2,7 +2,7 @@
 
 - Items are plain dicts in self.items; the ListView only displays them. Never read state back
   from widgets, and never save UI-only fields (index, selection) into the data.
-- App BINDINGS on printable keys (space, d, e) fire while the ListView has focus: it only binds
+- App BINDINGS on printable keys (s, x, e) fire while the ListView has focus: it only binds
   enter/up/down itself. They do NOT fire while an Input has focus: it takes printable keys.
   For enter on the list, handle ListView.Selected instead of a binding.
 - Rebuilding the list (clear + extend) resets ListView.index to None. Restore it, or the
@@ -17,16 +17,16 @@ from textual.widgets import Footer, Input, Label, ListItem, ListView
 
 class ListActionsApp(App):
     BINDINGS = [
-        Binding("space", "toggle", "Toggle"),
-        Binding("d", "delete", "Delete"),
+        Binding("s", "star", "Star"),
+        Binding("x", "remove", "Remove"),
     ]
 
     def __init__(self) -> None:
         super().__init__()
-        self.items: list[dict] = [{"title": "first", "done": False}, {"title": "second", "done": False}]
+        self.items: list[dict] = [{"url": "example.org", "starred": False}, {"url": "python.org", "starred": False}]
 
     def compose(self) -> ComposeResult:
-        yield Input(placeholder="New item", id="new-item")
+        yield Input(placeholder="Add a bookmark", id="new-item")
         yield ListView(id="items")
         yield Footer()
 
@@ -37,7 +37,7 @@ class ListActionsApp(App):
         lv = self.query_one("#items", ListView)
         keep = lv.index if index is None else index
         await lv.clear()
-        await lv.extend(ListItem(Label(("✓ " if it["done"] else "  ") + it["title"])) for it in self.items)
+        await lv.extend(ListItem(Label(("★ " if it["starred"] else "  ") + it["url"])) for it in self.items)
         if self.items:
             lv.index = min(keep or 0, len(self.items) - 1)
 
@@ -46,22 +46,22 @@ class ListActionsApp(App):
         return index if index is not None and index < len(self.items) else None
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
-        title = event.value.strip()
+        url = event.value.strip()
         event.input.value = ""  # focus stays in the input, ready for the next one
-        if title:
-            self.items.append({"title": title, "done": False})
+        if url:
+            self.items.append({"url": url, "starred": False})
             await self.refresh_view(index=len(self.items) - 1)  # then save, if the app keeps data
 
     async def on_list_view_selected(self, event: ListView.Selected) -> None:
-        await self.action_toggle()  # enter on the list
+        self.notify(f"open {self.items[event.index]['url']}", markup=False)  # enter on the list
 
-    async def action_toggle(self) -> None:
+    async def action_star(self) -> None:
         i = self.current()
         if i is not None:
-            self.items[i]["done"] = not self.items[i]["done"]
+            self.items[i]["starred"] = not self.items[i]["starred"]
             await self.refresh_view()
 
-    async def action_delete(self) -> None:
+    async def action_remove(self) -> None:
         i = self.current()
         if i is not None:
             del self.items[i]

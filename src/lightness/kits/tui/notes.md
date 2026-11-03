@@ -9,7 +9,7 @@
   in `__init__`. Anything that touches widgets runs from `on_mount` or later.
 - **One module, one App class**, plus a `main()` that reads the optional path argument.
   The class name, `__init__` parameters, widget ids and keys must match the task's contract exactly.
-- **Keys:** item actions (space, d, e, …) as App `BINDINGS` act on the highlighted item while a
+- **Keys:** item actions (s, x, e, …) as App `BINDINGS` act on the highlighted item while a
   list or table has focus. They do not fire while an `Input` or `TextArea` has focus (those take
   printable keys). Decide which widget has focus when, and set it explicitly.
 - **Missing or broken data files are normal:** start empty, never crash.

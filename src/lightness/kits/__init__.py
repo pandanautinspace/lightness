@@ -41,6 +41,12 @@ class Kit:
         return (self.dir / "cheatsheet.md").read_text()
 
     @property
+    def try_tool(self) -> Path | None:
+        """A script that runs the app and prints what it shows, copied into the workspace."""
+        path = self.dir / "try_app.py"
+        return path if path.exists() else None
+
+    @property
     def names_schema(self) -> dict:
         """JSON schema for the names the shell needs, filled from the task's contract."""
         props = {k: v["schema"] for k, v in self.meta["names"].items()}
@@ -115,6 +121,11 @@ def shell_path(kit: Kit, names: dict) -> str:
     return f"{names['module']}.py"
 
 
+def trying(kit: Kit, names: dict) -> str:
+    path = kit.dir / "try.md"
+    return path.read_text().replace("{module}", names["module"]) + "\n\n" if kit.try_tool and path.exists() else ""
+
+
 def context(kit: Kit, names: dict, parts_dir: str, chosen: list[str]) -> str:
     """Text for the task message: what was created, the design notes, the cheat sheet and the parts."""
     index = "\n".join(f"- `{p.name}`: {p.when}" for p in kit.parts)
@@ -122,6 +133,6 @@ def context(kit: Kit, names: dict, parts_dir: str, chosen: list[str]) -> str:
                      for p in kit.parts if p.name in chosen)
     return (f"## Starting point\n\nI created `{shell_path(kit, names)}`, a minimal {kit.category} app that already "
             f"runs. Build the task on it: keep its structure, replace the placeholder content.\n\n"
-            f"{kit.notes}\n\n{kit.cheatsheet}\n\n"
+            f"{kit.notes}\n\n{trying(kit, names)}{kit.cheatsheet}\n\n"
             f"## Parts\n\nSmall, working examples of common patterns, in `{parts_dir}`. Read one with "
             f"`cat {parts_dir}/<name>.py` when you need it; copy what fits.\n\n{index}\n{inline}")

@@ -248,6 +248,9 @@ class Kit(Middleware):
         parts_dir.mkdir(parents=True, exist_ok=True)
         for p in kit.parts:
             (parts_dir / p.path.name).write_text(p.path.read_text())
+        if kit.try_tool:
+            (parts_dir.parent / kit.try_tool.name).write_text(kit.try_tool.read_text())
+            (parts_dir.parent / kit.try_tool.with_suffix(".json").name).write_text(json.dumps(names))
         ctx.data["kit"] = (kit, names)
         ctx.log("kit", kind=kind, names=names, parts=chosen)
         return kits.context(kit, names, ".lightness/kit/parts", chosen)

@@ -14,7 +14,6 @@
   printable keys). Decide which widget has focus when, and set it explicitly.
 - **Missing or broken data files are normal:** start empty, never crash.
 - **Timers and randomness are injected** (a `now` callable, a seed) so tests are deterministic.
-- **Test the real app headlessly** with `run_test()` (see the `headless_test` part). Cover:
-  starting with no data file, starting with an existing file, every key in the contract, and a
-  restart after a change. Check the saved file's exact contents. Don't test by calling methods on
-  an app that was never started, and don't run the app in the foreground: there is no terminal.
+- **Check the real app with the try command** (below) after each change: run the steps a user
+  would, and compare what it prints with the task. Don't test by calling methods on an app that
+  was never started, and don't run the app in the foreground: there is no terminal.

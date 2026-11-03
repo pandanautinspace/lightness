@@ -290,13 +290,16 @@ pass rate degrades with distractors and with working-set size (find the knee for
 
 ## Milestones
 
-- **M0 — measure.** Install llama-server + models; benchmark runner; 8 starter tasks with
-  simulated users; mini-swe-agent baseline. Edit-format micro-benchmark on our models.
-- **M1 — loop core.** provider + constraints, turn assembly, action menu, `read/search/
-  write_file/run/test/done`, verify chain, guards. Whole-file edits only.
-- **M2 — spec workshop.** classify, decision catalog (starter set), spec template, acceptance
-  test generation, CLI Q&A, defaults policy; scaffolds for CLI, Flask, Textual.
-- **M3 — existing code.** symbol index, repo map, `edit_symbol`, working-set selection.
+- **M0 — measure.** *Done* ([diagnostic](research/m0-bare-diagnostic.md)): llama-server and
+  models, benchmark runner with sandbox, 8 starter tasks, bare-agent diagnostic runs.
+  Still open: simulated user (moved to M1) and the edit-format micro-benchmark.
+- **M1 — spec workshop + loop core.** See [m1-plan.md](m1-plan.md). Merges the old M1 and the
+  minimal part of M2, because M0 showed unstated preferences are the main failure mode.
+  Adds `edit_symbol` early.
+- **M2 — workshop depth.** Full decision catalog, scaffolds for CLI, Flask and Textual, demo
+  checkpoints.
+- **M3 — existing code.** Symbol index, repo map and working-set selection (`edit_symbol`
+  itself lands in M1).
 - **M4 — knowledge.** `api` introspection + import check, recipe cards, error playbook.
 - **M5 — playbooks + robustness.** playbooks per project type, best-of-N, demo checkpoints,
   tuning thinking budgets; ablation loop vs playbook.

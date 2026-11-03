@@ -43,6 +43,16 @@ def main(model: str) -> int:
             ok = a.covered and all(m.lower() in a.text.lower() for m in must)
             failures += not ok
             print(f"{'ok  ' if ok else 'MISS'} {tid:16} {q[:45]:45} -> {a.text[:70]!r}")
+    # Review: unrelated statements get no corrections; a contradicted one does; no volunteering.
+    user = SimulatedUser(client, load_task("file-organizer").intent)
+    fixes = user.review(["The tool prints a summary line at the end.", "Exit code is 0 on success."])
+    ok = not fixes
+    failures += not ok
+    print(f"{'ok  ' if ok else 'LEAK'} review/unrelated statements -> {fixes}")
+    fixes = user.review(["Images go to a folder named 'Pictures'.", "The tool prints a summary line at the end."])
+    ok = list(fixes) == [0] and "images" in fixes[0].lower() and "screenshot" not in fixes[0].lower()
+    failures += not ok
+    print(f"{'ok  ' if ok else 'BAD '} review/contradicted statement -> {fixes}")
     print(f"\n{failures} problem(s)")
     return 1 if failures else 0
 

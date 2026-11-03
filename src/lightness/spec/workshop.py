@@ -200,29 +200,57 @@ def write_spec(client: Client, task: str, project_type: str, decisions: list[Dec
     reply = client.decide(
         [{"role": "user", "content": SPEC_PROMPT.format(
             task=task, context=f"\nExisting code:\n{context}\n" if context else "", decisions=lines)}],
-        SPEC_SCHEMA, purpose="workshop.spec", reason_budget=reason_budget, max_tokens=4000)
+        SPEC_SCHEMA, purpose="workshop.spec", reason_budget=reason_budget, max_tokens=4000, temperature=0)
     return Spec(task=task, project_type=project_type, decisions=decisions, **reply.parsed)
 
 
 # --- orchestration ----------------------------------------------------------------------------
 
 def run_workshop(client: Client, user: UserChannel, task: str, *, ws: Path | None = None,
-                 max_asked: int = 5) -> Spec:
+                 max_asked: int = 5, review: bool = True) -> Spec:
     has_code = ws is not None and any(p.suffix == ".py" for p in ws.rglob("*.py"))
     context = repo_summary(ws) if has_code else ""
     project_type = classify(client, task, has_code)
     questions = generate_questions(client, task, project_type, context)
     ranked = sorted(questions, key=lambda q: q.score, reverse=True)
 
+    n_questions = max(max_asked - 1, 0) if review else max_asked  # the review counts as one question
     decisions = []
     for i, q in enumerate(ranked):
-        if i < max_asked:
+        if i < n_questions:
             ans = user.ask(q.question, q.options, q.default)
             status = "confirmed" if ans.covered else "defaulted"
             decisions.append(Decision(q.question, ans.text if ans.covered else q.default, status))
         else:
             decisions.append(Decision(q.question, q.default, "assumed"))
-    return write_spec(client, task, project_type, decisions, context)
+    spec = write_spec(client, task, project_type, decisions, context)
+    if not review or max_asked == 0:
+        return spec
+    return apply_review(client, user, spec, context)
+
+
+def review_statements(spec: Spec, limit: int = 30) -> list[tuple[str, int | None]]:
+    """What the user is shown: unconfirmed decisions, then acceptance criteria. (text, decision index)"""
+    items = [(f"{d.question} → {d.answer}", i) for i, d in enumerate(spec.decisions) if d.status != "confirmed"]
+    items += [(c, None) for f in spec.features for c in f["criteria"]]
+    return items[:limit]
+
+
+def apply_review(client: Client, user: UserChannel, spec: Spec, context: str = "") -> Spec:
+    """Show the draft's assumptions and criteria once; fold corrections back in and rewrite."""
+    items = review_statements(spec)
+    corrections = user.review([text for text, _ in items])
+    if not corrections:
+        return spec
+    decisions = list(spec.decisions)
+    for idx, correction in corrections.items():
+        text, decision_idx = items[idx]
+        if decision_idx is not None:
+            d = decisions[decision_idx]
+            decisions[decision_idx] = Decision(d.question, correction, "confirmed")
+        else:
+            decisions.append(Decision(f"Spec said: {text}", correction, "confirmed"))
+    return write_spec(client, spec.task, spec.project_type, decisions, context)
 
 
 def render(spec: Spec) -> str:

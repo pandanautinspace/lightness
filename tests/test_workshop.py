@@ -29,8 +29,12 @@ class FakeClient:
 class ScriptedUser:
     """Answers questions whose name is in `knows`; no preference otherwise."""
 
-    def __init__(self, knows):
-        self.knows, self.log = knows, []
+    def __init__(self, knows, corrections=None):
+        self.knows, self.log, self.corrections, self.shown = knows, [], corrections or {}, []
+
+    def review(self, statements):
+        self.shown = statements
+        return {i: fix for i, st in enumerate(statements) for key, fix in self.corrections.items() if key in st}
 
     def ask(self, question, options=None, default=None):
         a = Answer(f"user says {question}", "simulated") if question in self.knows else Answer(default, "simulated", covered=False)
@@ -40,7 +44,7 @@ class ScriptedUser:
 
 def test_asks_top_k_by_impact_times_ambiguity():
     user = ScriptedUser(knows={"q1"})
-    spec = run_workshop(FakeClient(), user, "do it", max_asked=3)
+    spec = run_workshop(FakeClient(), user, "do it", max_asked=3, review=False)
     assert [e.question for e in user.log] == ["q1", "q4", "q6"]  # scores 9, 6, 6 (stable order)
     status = {d.question: d.status for d in spec.decisions}
     assert status["q1"] == "confirmed" and status["q4"] == "defaulted" and status["q0"] == "assumed"
@@ -71,3 +75,21 @@ def test_spec_roundtrip_and_render():
     assert again == spec
     md = render(spec)
     assert "- [ ] c" in md and "| q1 | user says q1 | confirmed |" in md
+
+
+def test_review_takes_one_question_slot_and_folds_in_corrections():
+    client = FakeClient()
+    user = ScriptedUser(knows={"q1"}, corrections={"q4 → d4": "use 4 exactly", "c": "c must be strict"})
+    spec = run_workshop(client, user, "do it", max_asked=3)
+    assert [e.question for e in user.log] == ["q1", "q4"]  # 2 questions + the review
+    assert "q4 → d4" in user.shown and "c" in user.shown and not any(s.startswith("q1 →") for s in user.shown)
+    by_q = {d.question: d for d in spec.decisions}
+    assert by_q["q4"].answer == "use 4 exactly" and by_q["q4"].status == "confirmed"
+    assert by_q["Spec said: c"].answer == "c must be strict"
+    assert "q4 → use 4 exactly" in client.spec_prompt  # the rewrite saw the corrections
+
+
+def test_no_corrections_means_no_rewrite():
+    client = FakeClient()
+    spec = run_workshop(client, ScriptedUser(knows=set()), "do it", max_asked=2)
+    assert all(not d.question.startswith("Spec said") for d in spec.decisions)

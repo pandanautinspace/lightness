@@ -101,7 +101,7 @@ def main(
     task_ids = all_task_ids() if tasks == "all" else tasks.split(",")
     agent_obj = make_agent(agent, model)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    batch_dir = out / f"{stamp}-{agent}-{model or 'none'}-{os.getpid()}"
+    batch_dir = out / f"{stamp}-{agent_obj.name}-{model or 'none'}-{os.getpid()}"
     batch_dir.mkdir(parents=True)
     results_path = batch_dir / "results.jsonl"
 

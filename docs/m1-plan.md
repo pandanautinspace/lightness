@@ -62,9 +62,13 @@ set, then each piece removed one at a time. A full 8-task bare-shaped run takes 
 bare, make the same work cheaper. Measure output tokens, model calls, and wall time per passed
 task. Candidates, from what the bare traces spend tokens and turns on:
 
-- **Targeted edits instead of whole-file rewrites.** The bare agent rewrote `notes.py` from
-  scratch 3 times. A `str_replace`-style edit (exact old text → new text, not a diff), with
-  the harness repairing whitespace and ambiguity, cuts output on every fix.
+- **Smaller rewrites, still whole.** Edit-format research says small and mid-size models are
+  most reliable with whole-file rewrites, so those stay the default and are always available;
+  no search/replace or diff formats. Measured on the 35B bare runs (16 runs): file writes are
+  ~42% of output tokens, rewrites of existing files ~19%, and 16 of 23 rewrites changed ≤20%
+  of lines. Experiment: an extra tool that rewrites one whole function by name (harness
+  splices it in, as `replace_symbol` does), offered beside bash in one configuration. Measure
+  pass rate, rewrite tokens and how often it's chosen, and re-check on the 9B.
 - **The harness runs the program.** After a write, run the spec's example invocations and
   probes and append what they printed. Saves the many "run it again" turns.
 - **The harness makes sample data from the spec.** The bare agent spent ~6 commands creating

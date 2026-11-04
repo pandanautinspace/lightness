@@ -29,7 +29,14 @@ def run_metrics(run_dir: Path, row: dict) -> dict:
         kind = x["kind"] if x["kind"] in KINDS else "other"
         kinds_out[kind] += x["out"]
         kinds_s[kind] += x["model_s"] + x["tool_s"]
+    events = run_dir / "events.jsonl"
+    empty = events.read_text().count('"empty_reply"') if events.exists() else 0
+    calls = run_dir / "calls.jsonl"
+    rows = [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []
+    stalled = sum(1 for c in rows if c.get("purpose") == "agent" and (c.get("latency") or 0) >= 60)
     return {
+        "empty": empty,
+        "stalled": stalled,
         "spec_passed": row["tests_passed"] - row.get("intent_passed", 0),
         "spec_total": row["tests_total"] - row.get("intent_total", 0),
         "intent_passed": row.get("intent_passed", 0),
@@ -95,6 +102,8 @@ def main() -> None:
         ("steps after the last app change", mean("tail"), "{:.0f}"),
         ("regressions caught (per sweep of 9)", total("regressions"), "{:.1f}"),
         ("runs that hit the step or wall limit (of 9)", total("limit"), "{:.1f}"),
+        ("infrastructure: empty replies per run", mean("empty"), "{:.1f}"),
+        ("infrastructure: calls ≥ 60 s (timed out and retried) per run", mean("stalled"), "{:.2f}"),
     ]
     print(f"| metric | {' | '.join(names)} |\n|---|{'---|' * len(names)}")
     for label, f, fmt in metrics:

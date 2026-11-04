@@ -77,7 +77,19 @@ def run_stats(d: Path) -> dict | None:
         return None
     msgs = json.loads((d / "messages.json").read_text())
     calls = [json.loads(line) for line in (d / "calls.jsonl").read_text().splitlines()]
-    agent_calls = [c for c in calls if c.get("purpose") == "agent" and c.get("ok")]
+    agent_calls, streak = [], 0
+    for c in calls:
+        if c.get("purpose") != "agent" or not c.get("ok"):
+            continue
+        # An empty reply is asked again (up to 3 times in a step); only the 3rd of a streak is kept in
+        # the transcript, so drop the others to keep calls and transcript steps paired.
+        if c.get("finish_reason") == "content_filter" or not c.get("completion_tokens"):
+            streak += 1
+            if streak % 3:
+                continue
+        else:
+            streak = 0
+        agent_calls.append(c)
     events = [json.loads(line) for line in (d / "events.jsonl").read_text().splitlines()] if (d / "events.jsonl").exists() else []
     module = next((e["names"]["module"] for e in events if e.get("event") == "kit"), None)
     reasoning = {}

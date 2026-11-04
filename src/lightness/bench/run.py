@@ -10,9 +10,11 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import tomllib
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -20,7 +22,14 @@ from pathlib import Path
 import typer
 
 from lightness.bench import sandbox
-from lightness.bench.agents import BareAgent, LightnessAgent, MiddlewareAgent, NullAgent, OracleAgent, bench_env
+from lightness.bench.agents import (
+    BareAgent,
+    LightnessAgent,
+    MiddlewareAgent,
+    NullAgent,
+    OracleAgent,
+    bench_env,
+)
 from lightness.bench.tasks import REPO_ROOT, Task, all_task_ids, load_task
 
 app = typer.Typer(add_completion=False)
@@ -97,6 +106,7 @@ def main(
     tasks: str = typer.Option("all", help="comma-separated task ids, or 'all'"),
     suite: str = typer.Option("tasks", help="task folder under bench/: tasks (main benchmark), kit-tui, ..."),
     runs: int = typer.Option(1, help="runs per task"),
+    jobs: int = typer.Option(1, help="runs at once (keep 1 for a local server: it serves one request at a time)"),
     out: Path = typer.Option(REPO_ROOT / "runs"),
 ):
     task_ids = all_task_ids(suite) if tasks == "all" else tasks.split(",")
@@ -107,30 +117,37 @@ def main(
     batch_dir.mkdir(parents=True)
     results_path = batch_dir / "results.jsonl"
 
-    for tid in task_ids:
-        task = load_task(tid, suite)
-        for i in range(runs):
-            run_dir = batch_dir / tid / str(i)
-            ws = run_dir / "workspace"
-            seed = task.environment / "seed"
-            if seed.exists():
-                shutil.copytree(seed, ws)
-            else:
-                ws.mkdir(parents=True)
-            subprocess.run(["git", "init", "-q"], cwd=ws)  # lets us diff what the agent changed
+    lock = threading.Lock()
 
-            t0 = time.time()
-            res = agent_obj.run(task, ws, run_dir)
-            v = verify(task, ws, run_dir)
-            row = {"task": tid, "run": i, "agent": agent, "model": model, **asdict(res), **v,
-                   "total_sec": round(time.time() - t0, 1)}
+    def one(tid: str, i: int) -> None:
+        task = load_task(tid, suite)
+        run_dir = batch_dir / tid / str(i)
+        ws = run_dir / "workspace"
+        seed = task.environment / "seed"
+        if seed.exists():
+            shutil.copytree(seed, ws)
+        else:
+            ws.mkdir(parents=True)
+        subprocess.run(["git", "init", "-q"], cwd=ws)  # lets us diff what the agent changed
+
+        t0 = time.time()
+        res = agent_obj.run(task, ws, run_dir)
+        v = verify(task, ws, run_dir)
+        row = {"task": tid, "run": i, "agent": agent, "model": model, **asdict(res), **v,
+               "total_sec": round(time.time() - t0, 1)}
+        mark = "PASS" if v["pass"] else "fail"
+        asked = len(res.extra.get("questions", []))
+        with lock:
             with results_path.open("a") as f:
                 f.write(json.dumps(row) + "\n")
-            mark = "PASS" if v["pass"] else "fail"
-            asked = len(res.extra.get("questions", []))
             typer.echo(f"{mark} {tid}#{i} tests {v['tests_passed']}/{v['tests_total']} "
                        f"intent {v.get('intent_passed', 0)}/{v.get('intent_total', 0)} asked={asked} "
                        f"status={res.exit_status} calls={res.model_calls} {row['total_sec']}s")
+
+    todo = [(tid, i) for tid in task_ids for i in range(runs)]
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        for future in [pool.submit(one, tid, i) for tid, i in todo]:
+            future.result()
 
     rows = [json.loads(line) for line in results_path.read_text().splitlines()]
     n_pass = sum(r["pass"] for r in rows)

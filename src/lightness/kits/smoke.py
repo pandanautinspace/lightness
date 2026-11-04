@@ -59,7 +59,7 @@ def tui(ws: Path, names: dict, run_dir: Path | None = None, timeout: int = 30) -
     if not (ws / f"{module}.py").exists():
         return []
     cases: list[tuple[str, str | None, str | None]] = []
-    has_path = names.get("storage", "none") != "none" and names.get("data_arg")
+    has_path = bool(names.get("data_arg"))
     base = Path(tempfile.mkdtemp(dir=(run_dir / "tmp") if run_dir else None, prefix="smoke-"))
     name = names.get("data_default") or "data.json"
     cases.append(("starting with no data file", str(base / "missing" / name) if has_path else None, None))

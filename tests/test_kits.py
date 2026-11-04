@@ -1,6 +1,8 @@
 """Kits must not rot: every shell renders and starts, every part runs and does what it says."""
 
 import asyncio
+import json
+import subprocess
 import importlib.util
 import sys
 from pathlib import Path
@@ -366,3 +368,76 @@ def test_cheatsheet_claims():
 
     with pytest.raises(Exception):
         drive(BadCss(), lambda app, pilot: asyncio.sleep(0))
+
+
+def try_app(ws: Path, names: dict, *args: str) -> str:
+    kit = load_kit("tui")
+    (ws / ".lightness" / "kit").mkdir(parents=True, exist_ok=True)
+    (ws / ".lightness" / "kit" / "try_app.py").write_text(kit.try_tool.read_text())
+    (ws / ".lightness" / "kit" / "try_app.json").write_text(json.dumps(names))
+    proc = subprocess.run([sys.executable, ".lightness/kit/try_app.py", *args], cwd=ws, capture_output=True,
+                          text=True, timeout=60, check=False)
+    return proc.stdout + proc.stderr
+
+
+def test_try_app_shows_list_highlight_and_data_file(tmp_path):
+    (tmp_path / "bookmarks.py").write_text((KITS_DIR / "tui" / "parts" / "list_actions.py").read_text())
+    out = try_app(tmp_path, {"module": "bookmarks", "app_class": "ListActionsApp", "storage": "none"},
+                  "focus:#items", "press:down,s", "press:x")
+    assert "#items list, highlighted=0:\n    [0] example.org\n    [1] python.org" in out
+    assert "after press:down,s:\n  #items list, highlighted=1:\n    [0] example.org\n    [1] ★ python.org" in out
+    assert "after press:x:\n  #items list, highlighted=0:\n    [0] example.org\n" in out
+
+
+def test_try_app_data_file_restart_and_quit(tmp_path):
+    names = SHELL_NAMES["json"]
+    (tmp_path / "notes.py").write_text(render_shell(load_kit("tui"), names))
+    out = try_app(tmp_path, names, "--data", '[{"x": 1}]', "restart", "press:ctrl+q")
+    assert 'data file: [{"x": 1}]' in out
+    assert "after restart (same data file):" in out
+    assert "the app exited" in out
+    assert not list((tmp_path / ".lightness").glob("try-*"))  # temp data cleaned up
+
+
+def test_try_app_grid_modal_and_crash(tmp_path):
+    parts = KITS_DIR / "tui" / "parts"
+    (tmp_path / "lights.py").write_text((parts / "grid_game.py").read_text())
+    out = try_app(tmp_path, {"module": "lights", "app_class": "LightsApp", "storage": "none"}, "press:space")
+    assert "#board grid 3 wide:\n    cursor+on on        .\n    on        .         ." in out
+    (tmp_path / "titles.py").write_text((parts / "modal.py").read_text())
+    out = try_app(tmp_path, {"module": "titles", "app_class": "ModalApp", "storage": "none"}, "press:e")
+    assert "(now on EditScreen)" in out and "#edit-value input: 'untitled'" in out
+    (tmp_path / "broken.py").write_text("from textual.app import App\nclass B(App):\n    def on_mount(self):\n"
+                                        "        raise RuntimeError('boom')\n")
+    out = try_app(tmp_path, {"module": "broken", "app_class": "B", "storage": "none"})
+    assert "CRASH:" in out and "RuntimeError: boom" in out and "broken.py" in out
+
+
+def test_try_app_unknown_widget_is_not_a_crash(tmp_path):
+    (tmp_path / "bookmarks.py").write_text((KITS_DIR / "tui" / "parts" / "list_actions.py").read_text())
+    out = try_app(tmp_path, {"module": "bookmarks", "app_class": "ListActionsApp", "storage": "none"},
+                  "focus:#nope", "focus:#items")
+    assert "no widget matches '#nope' on this screen; ids here: #items, #new-item" in out
+    assert "CRASH" not in out and "focus: #items" in out
+
+
+def test_try_app_documented_input_replace_works(tmp_path):
+    assert "press:end,ctrl+u" in (KITS_DIR / "tui" / "try.md").read_text()
+    (tmp_path / "conv.py").write_text((KITS_DIR / "tui" / "parts" / "input_form.py").read_text())
+    out = try_app(tmp_path, {"module": "conv", "app_class": "ConverterApp", "storage": "none"},
+                  "type:12", "focus:#amount", "press:end,ctrl+u", "type:3")
+    assert "after type:3:\n  #amount input: '3'" in out
+
+
+def test_try_app_passes_an_input_file_even_without_storage(tmp_path):
+    (tmp_path / "viewer.py").write_text(
+        "from pathlib import Path\nfrom textual.app import App\nfrom textual.widgets import Static\n\n\n"
+        "class V(App):\n    def __init__(self, json_path=None):\n        super().__init__()\n"
+        "        self.text = Path(json_path).read_text() if json_path else '(no file)'\n\n"
+        "    def compose(self):\n        yield Static(self.text, id='body')\n")
+    (tmp_path / "in.json").write_text('{"a": 1}')
+    names = {"module": "viewer", "app_class": "V", "storage": "none", "data_arg": "json_path"}
+    out = try_app(tmp_path, names, "--data-from", "in.json")
+    assert "#body: '{\"a\": 1}'" in out
+    out = try_app(tmp_path, {**names, "data_arg": ""}, "--data", "x")
+    assert "--data/--data-from ignored" in out

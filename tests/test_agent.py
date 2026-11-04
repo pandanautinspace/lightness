@@ -118,6 +118,15 @@ def test_guard_stops_interactive_app_quickly(ws):
     out = tool_outputs(client)[1]
     assert time.time() - t < 20
     assert "interactive full-screen app" in out and "before" in out and "\\u001b[?1049h" not in out
+    assert "run_test()" in out and "try_app.py" not in out
+
+
+def test_guard_points_to_try_app_when_the_kit_gave_one(ws):
+    (ws / ".lightness" / "kit").mkdir(parents=True)
+    (ws / ".lightness" / "kit" / "try_app.py").write_text("")
+    a, client = agent(ws, [write("app.py", TUI), "python app.py", "true"], guard=True)
+    a.run("x")
+    assert "python .lightness/kit/try_app.py" in tool_outputs(client)[1]
 
 
 def test_guard_background_process_does_not_block(ws):
@@ -160,7 +169,10 @@ def test_kit_writes_shell_and_reports_start_changes(ws):
     task = "Make a notes app. Contract: notes.py defines NotesApp(data_path)."
     TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit()], step_limit=5).run(task)
     first_user = client.seen[0][1]["content"]
-    assert "I created `notes.py`" in first_user and "### Part `headless_test`" in first_user
+    assert "I created `notes.py`" in first_user and "## Trying the app" in first_user
+    assert "### Part `headless_test`" not in first_user
+    config = json.loads((ws / ".lightness" / "kit" / "try_app.json").read_text())
+    assert config["module"] == "notes" and (ws / ".lightness" / "kit" / "try_app.py").exists()
     assert "### Part `list_actions`" in first_user and "### Part `modal`" not in first_user
     assert (ws / ".lightness" / "kit" / "parts" / "modal.py").exists()
     outs = tool_outputs(client)
@@ -188,3 +200,14 @@ def test_kit_skips_existing_code(ws):
     env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
     TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit()], step_limit=2).run("change it")
     assert not (ws / "notes.py").exists() and "Starting point" not in client.seen[0][1]["content"]
+
+
+def test_text_tool_call_recovery():
+    from lightness.agent.loop import text_tool_call
+
+    assert text_tool_call('Run it:\n```bash\n{"command": "ls -la"}\n```') == "ls -la"
+    assert text_tool_call('{"name": "bash", "parameters": {"command": "python a.py"}}') == "python a.py"
+    assert text_tool_call("Let me look.\n```bash\ncat a.py\n```\n") == "cat a.py"
+    assert text_tool_call("Plan: first ```bash\nls\n``` then ```bash\npwd\n```") is None  # two: unclear
+    assert text_tool_call('{"state": {"a": 1}}') is None
+    assert text_tool_call("No command here.") is None

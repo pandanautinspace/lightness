@@ -23,3 +23,33 @@ model = "qwen9"
 context = 65536
 mode = "strict"
 caps = { json_schema = true, thinking_toggle = true, thinking_budget_field = "thinking_budget_tokens" }
+
+# Hosted models (MIT Parley). The key comes from $OPENAI_API_KEY or the git-ignored .env.parley.
+# The proxy ignores reasoning_effort; GPT-5 models always reason and don't return the reasoning.
+
+[nano]
+base_url = "https://parley.api.mit.edu/v1"
+model = "gpt-5-nano"
+api_key_env = "OPENAI_API_KEY"
+env_file = ".env.parley"
+context = 65536
+mode = "strict"
+caps = { json_schema = true, thinking_toggle = false, thinking_budget_field = "", reasoning_reserve = 8000, tool_required = true }
+
+[maverick]
+base_url = "https://parley.api.mit.edu/v1"
+model = "llama-4-maverick-17b"
+api_key_env = "OPENAI_API_KEY"
+env_file = ".env.parley"
+context = 65536
+mode = "strict"
+caps = { json_schema = true, thinking_toggle = false, thinking_budget_field = "", max_output = 8192 }  # Bedrock: no tool_choice=required
+
+[haiku]
+base_url = "https://parley.api.mit.edu/v1"
+model = "claude-haiku-4-5"
+api_key_env = "OPENAI_API_KEY"
+env_file = ".env.parley"
+context = 65536
+mode = "strict"
+caps = { json_schema = true, thinking_toggle = false, thinking_budget_field = "", tool_required = true }

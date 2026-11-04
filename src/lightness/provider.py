@@ -5,6 +5,8 @@ broken down by where tokens and time went.
 """
 
 import json
+import os
+import re
 import time
 import tomllib
 from dataclasses import dataclass, field
@@ -38,6 +40,12 @@ class Caps:
     thinking_toggle: bool = True
     # Per-request request field that caps thinking tokens (None = not supported).
     thinking_budget_field: str | None = "thinking_budget_tokens"
+    # Added to every max_tokens, for models that always reason and count it as output (GPT-5).
+    reasoning_reserve: int = 0
+    # The endpoint's output limit; larger requests are clamped to it (0 = no limit).
+    max_output: int = 0
+    # Send tool_choice="required" with tools, so every reply is a tool call.
+    tool_required: bool = False
 
 
 @dataclass
@@ -66,18 +74,25 @@ class Client:
         sampling: dict | None = None,
         timeout: float = 900,
         transport: httpx.BaseTransport | None = None,
+        api_key: str | None = None,
     ):
         self.model = model
         self.caps = caps or Caps()
         self.log_path = log_path
         self.sampling = sampling or {}
-        self.http = httpx.Client(base_url=base_url.rstrip("/"), timeout=timeout, transport=transport)
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        self.http = httpx.Client(base_url=base_url.rstrip("/"), timeout=timeout, transport=transport, headers=headers)
+
+    def _clamp(self, max_tokens: int) -> int:
+        return min(max_tokens, self.caps.max_output) if self.caps.max_output else max_tokens
 
     @classmethod
     def from_registry(cls, name: str, **kwargs) -> "Client":
         """Build a client from an entry in models.toml."""
         entry = tomllib.loads((REPO_ROOT / "models.toml").read_text())[name]
         caps = Caps(**entry.get("caps", {}))
+        if "api_key_env" in entry:
+            kwargs.setdefault("api_key", _api_key(entry["api_key_env"], entry.get("env_file")))
         return cls(entry["base_url"], entry["model"], caps=caps, sampling=entry.get("sampling"), **kwargs)
 
     def chat(
@@ -92,21 +107,24 @@ class Client:
         temperature: float | None = None,
         tools: list[dict] | None = None,
     ) -> Reply:
-        body: dict[str, Any] = {"model": self.model, "messages": messages, "max_tokens": max_tokens, **self.sampling}
+        body: dict[str, Any] = {"model": self.model, "messages": messages,
+                                "max_tokens": self._clamp(max_tokens + self.caps.reasoning_reserve), **self.sampling}
         if tools:
             body["tools"] = tools
+            if self.caps.tool_required:
+                body["tool_choice"] = "required"
         if temperature is not None:
             body["temperature"] = temperature
         if stop:
             body["stop"] = stop
         if schema is not None:
-            body["response_format"] = {"type": "json_schema", "json_schema": {"name": purpose, "schema": schema, "strict": True}}
+            body["response_format"] = {"type": "json_schema", "json_schema": {"name": re.sub(r"[^A-Za-z0-9_-]", "_", purpose), "schema": _typed(schema), "strict": True}}
         if self.caps.thinking_toggle:
             body["chat_template_kwargs"] = {"enable_thinking": bool(thinking)}
         if thinking is not True and thinking and self.caps.thinking_budget_field:
             body[self.caps.thinking_budget_field] = int(thinking)
             # Thinking cut short by the budget spills into the answer; leave room for it.
-            body["max_tokens"] = max_tokens + int(thinking)
+            body["max_tokens"] = self._clamp(max_tokens + int(thinking))
 
         start = time.time()
         try:
@@ -175,11 +193,13 @@ class Client:
         row: dict[str, Any] = {"ts": time.time(), "purpose": purpose, "model": self.model, "ok": ok, "latency": round(latency, 3)}
         if reply is not None:
             t = reply.timings
+            details = reply.usage.get("prompt_tokens_details") or {}
+            cached = t.get("cache_n", details.get("cached_tokens", details.get("cache_read_input_tokens")))
             row |= {
                 "thinking": thinking,
                 "prompt_tokens": reply.usage.get("prompt_tokens"),
                 "completion_tokens": reply.usage.get("completion_tokens"),
-                "cached_tokens": t.get("cache_n"),
+                "cached_tokens": cached,
                 "prompt_ms": t.get("prompt_ms"),
                 "predicted_ms": t.get("predicted_ms"),
                 "reasoning_chars": len(reply.reasoning),
@@ -190,6 +210,34 @@ class Client:
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         with self.log_path.open("a") as f:
             f.write(json.dumps(row) + "\n")
+
+
+_JSON_TYPES = {str: "string", bool: "boolean", int: "integer", float: "number", type(None): "null"}
+
+
+def _typed(schema):
+    """Add the "type" that OpenAI's strict mode requires next to a bare enum or const."""
+    if isinstance(schema, list):
+        return [_typed(s) for s in schema]
+    if not isinstance(schema, dict):
+        return schema
+    out = {k: _typed(v) if k not in ("enum", "const") else v for k, v in schema.items()}
+    if "type" not in out and ("enum" in out or "const" in out):
+        types = list(dict.fromkeys(_JSON_TYPES.get(type(v), "string") for v in out.get("enum", [out.get("const")])))
+        out["type"] = types[0] if len(types) == 1 else types
+    return out
+
+
+def _api_key(var: str, env_file: str | None) -> str:
+    """The key from the environment, else from a git-ignored KEY=VALUE file in the repo."""
+    if os.environ.get(var):
+        return os.environ[var]
+    if env_file and (REPO_ROOT / env_file).exists():
+        for line in (REPO_ROOT / env_file).read_text().splitlines():
+            key, _, value = line.removeprefix("export ").partition("=")
+            if key.strip() == var:
+                return value.strip().strip("'\"")
+    raise ProviderError(f"no API key: set {var} or put it in {env_file}")
 
 
 def _validate(reply: Reply, schema: dict) -> str | None:

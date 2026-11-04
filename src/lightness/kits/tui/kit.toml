@@ -1,7 +1,7 @@
 # Textual app kit. See docs/kits.md for the archetypes this must cover.
 
 # Parts always shown in full (not only in the index).
-always = ["headless_test"]
+always = []
 
 [names.module]
 help = "file name of the app module without .py (e.g. the contract's `notes.py` → notes)"
@@ -37,7 +37,7 @@ schema = { type = "string", maxLength = 1500 }
 
 [[parts]]
 name = "headless_test"
-when = "testing any Textual app: start it headless, press keys, check widgets and saved files"
+when = "only when the task asks for test files: pytest tests that drive the app headlessly"
 
 [[parts]]
 name = "list_actions"

@@ -76,6 +76,17 @@ def test_format_error_shows_the_try_command_when_the_kit_gave_one(ws):
     assert '{"command": "python .lightness/kit/try_app.py"}' in message and SUBMIT not in message
 
 
+def test_empty_replies_are_retried_and_never_stored_empty(ws):
+    a, client = agent(ws, [], step_limit=1)
+    a.run("x")
+    assert len(client.seen) == 3  # asked three times in the one step
+    assert client.seen[-1][-1]["role"] != "assistant"
+    a, client = agent(ws, [], step_limit=2)
+    a.run("x")
+    stored = [m for m in client.seen[-1] if m["role"] == "assistant"]
+    assert stored and all(m["content"] == "(empty response)" for m in stored)
+
+
 def test_checks_report_static_problem_without_rewriting(ws):
     code = "def f( x ):\n    return undefined_name + x\n"
     a, client = agent(ws, [write("core.py", code), "true"], [mw.Checks()])

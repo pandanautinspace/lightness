@@ -57,3 +57,23 @@ env_file = ".env.parley"
 context = 65536
 mode = "strict"
 caps = { json_schema = true, thinking_toggle = false, thinking_budget_field = "", tool_required = true }
+
+[haiku55]
+base_url = "https://parley.api.mit.edu/v1"
+timeout = 60  # a stalled request is retried after a minute (provider retries)
+model = "claude-haiku-5-5"
+api_key_env = "OPENAI_API_KEY"
+env_file = ".env.parley"
+context = 65536
+mode = "strict"
+caps = { json_schema = true, thinking_toggle = false, thinking_budget_field = "", tool_required = true }  # probed 2026-11-04
+
+[flashlite]
+base_url = "https://parley.api.mit.edu/v1"
+timeout = 60  # a stalled request is retried after a minute (provider retries)
+model = "gemini-3.5-flash-lite"
+api_key_env = "OPENAI_API_KEY"
+env_file = ".env.parley"
+context = 65536
+mode = "strict"
+caps = { json_schema = true, thinking_toggle = false, thinking_budget_field = "", tool_required = true }  # probed 2026-11-04; Parley reports no cache usage

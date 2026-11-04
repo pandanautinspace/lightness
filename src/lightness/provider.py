@@ -213,6 +213,7 @@ class Client:
                 "prompt_tokens": reply.usage.get("prompt_tokens"),
                 "completion_tokens": reply.usage.get("completion_tokens"),
                 "cached_tokens": cached,
+                "cache_write_tokens": details.get("cache_write_input_tokens", details.get("cache_creation_input_tokens")),
                 "prompt_ms": t.get("prompt_ms"),
                 "predicted_ms": t.get("predicted_ms"),
                 "reasoning_chars": len(reply.reasoning),

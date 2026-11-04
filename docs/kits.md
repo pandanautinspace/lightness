@@ -320,3 +320,41 @@ the same on spec tests, lower on intent tests, and is less predictable; its Haik
 looks like a model-specific effect. Worth following up: why first helps json-viewer on both
 models (likely the tests pin the tree/detail contract early). Next confirmation is on the
 local 35B and 9B, where the cost question doesn't arise.
+
+### Look on the local 35B: none vs first, 2026-11-04 (4 tasks × 1 run)
+
+A limited, one-run look, not a confirmation. `--model qwen35a3` (local llama-server, one slot),
+code at `13a5b7d`. Tasks: json-viewer, loan-calc, stopwatch and airport-lookup. Batches:
+`runs/kit-tui-20261104-{164803,174221}-mw-env.guard.kit-tests.{none,first}-qwen35a3-*`.
+
+| metric (mean over 4 runs) | none | first |
+|---|---|---|
+| hidden spec tests passed, % | 95.0 | 95.0 |
+| hidden intent tests passed, % | 8.3 | 8.3 |
+| output tokens per run | 31091 | 23522 |
+| agent wall time per run, s | 799 | 555 |
+| steps per run | 60 | 42 |
+| runs that did not submit | 2 (json-viewer ContextOverflow, stopwatch TimeExceeded at 1886 s) | 0 |
+| test-file output tokens per run / regressions caught | 0 / 0 | 10096 / 0 |
+
+| task | none | first |
+|---|---|---|
+| airport-lookup | 11/11 · 0/3 | 11/11 · 0/3 |
+| json-viewer | 10/10 · 0/3 | 10/10 · 0/3 |
+| loan-calc | 11/11 · 1/3 | 11/11 · 1/3 |
+| stopwatch | 6/8 · 0/3 | 6/8 · 0/3 |
+
+**Findings**
+
+- **Scores are identical.** Both arms fail exactly the same hidden tests on every task
+  (stopwatch: minutes format and pause/resume; json-viewer: all three intent tests).
+- **first was cheaper and steadier here:** 30% less wall time, 30% fewer steps, and both runs
+  that none failed to submit (context overflow, wall limit) finished under first. With one run
+  per task this may be noise; on Haiku 5.5 first hit limits more often, not less.
+- The 35B matches Haiku 5.5 on spec tests for these tasks (95% vs 90% for Haiku 5.5 none on the
+  same 4 tasks), but is far behind on intent tests (8% vs 57%).
+- The "calls ≥ 60 s" row is left out: on the local server long calls are slow generation, not
+  timeouts.
+
+**Recommendation:** unchanged, keep **none** as the default. If the time and limit savings on
+the 35B matter, the next step is 3 runs per task on these 4 tasks (about 4.5 hours locally).

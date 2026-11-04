@@ -352,7 +352,7 @@ code at `13a5b7d`. Tasks: json-viewer, loan-calc, stopwatch and airport-lookup. 
   that none failed to submit (context overflow, wall limit) finished under first. With one run
   per task this may be noise; on Haiku 5.5 first hit limits more often, not less.
 - The 35B matches Haiku 5.5 on spec tests for these tasks (95% vs 90% for Haiku 5.5 none on the
-  same 4 tasks), but is far behind on intent tests (8% vs 57%).
+  same 4 tasks), but is far behind on intent tests (8% vs 47%).
 - The "calls ≥ 60 s" row is left out: on the local server long calls are slow generation, not
   timeouts.
 

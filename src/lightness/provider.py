@@ -127,10 +127,7 @@ class Client:
             body["max_tokens"] = self._clamp(max_tokens + int(thinking))
 
         start = time.time()
-        try:
-            resp = self.http.post("/chat/completions", json=body)
-        except httpx.TransportError as e:
-            raise ProviderError(f"request failed: {e}") from e
+        resp = self._post(body)
         latency = time.time() - start
         data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
         if resp.status_code != 200 or "error" in data:
@@ -153,6 +150,20 @@ class Client:
         )
         self._log(purpose, reply, latency, ok=True, thinking=thinking)
         return reply
+
+    RETRIES = 5  # rate limits, server errors and dropped connections: wait 2, 4, 8, 16, 32 s
+
+    def _post(self, body: dict) -> httpx.Response:
+        for attempt in range(self.RETRIES + 1):
+            try:
+                resp = self.http.post("/chat/completions", json=body)
+                if resp.status_code not in (429, 500, 502, 503, 504, 529) or attempt == self.RETRIES:
+                    return resp
+            except httpx.TransportError as e:
+                if attempt == self.RETRIES:
+                    raise ProviderError(f"request failed: {e}") from e
+            time.sleep(2 ** (attempt + 1))
+        raise AssertionError("unreachable")
 
     def decide(
         self,

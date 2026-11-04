@@ -110,20 +110,22 @@ def run_stats(d: Path) -> dict | None:
 def main():
     batch = Path(sys.argv[1])
     show_steps = "--steps" in sys.argv
-    results = {json.loads(l)["task"]: json.loads(l) for l in (batch / "results.jsonl").read_text().splitlines()}
+    rows = [json.loads(line) for line in (batch / "results.jsonl").read_text().splitlines()]
+    results = {(r["task"], r["run"]): r for r in rows}
     total_kind_out = collections.Counter()
     total_kind_n = collections.Counter()
     total_kind_s = collections.Counter()
     totals = collections.Counter()
     print(f"# {batch.name}\n")
-    print(f"{'task':20} {'steps':>5} {'out':>7} {'reason%':>7} {'gen s':>6} {'pre s':>6} {'model s':>7} {'tool s':>6} "
+    print(f"{'task#run':22} {'steps':>5} {'out':>7} {'reason%':>7} {'gen s':>6} {'pre s':>6} {'model s':>7} {'tool s':>6} "
           f"{'app writes':>10} {'last app chg':>12} spec")
-    for task_dir in sorted(p for p in batch.iterdir() if p.is_dir()):
-        st = run_stats(task_dir / "0")
+    for run_dir in sorted(batch.glob("*/[0-9]*")):
+        st = run_stats(run_dir)
         if st is None:
             continue
         s = st["steps"]
-        r = results.get(task_dir.name, {})
+        r = results.get((run_dir.parent.name, int(run_dir.name)), {})
+        label = f"{run_dir.parent.name}#{run_dir.name}"
         out = sum(x["out"] for x in s)
         # reasoning share: reasoning chars / (reasoning + visible output chars), as a proxy of token share
         rc = sum(x["reason_chars"] for x in s)
@@ -131,9 +133,9 @@ def main():
         app_steps = [x["i"] for x in s if x["kind"] in APP_CHANGE]
         writes = sum(1 for x in s if x["kind"] == "write:app")
         spec = f"{r.get('tests_passed', 0) - r.get('intent_passed', 0)}/{r.get('tests_total', 0) - r.get('intent_total', 0)}"
-        print(f"{task_dir.name:20} {len(s):5} {out:7} {100 * rc / max(1, rc + vc):6.0f}% {sum(x['gen_s'] for x in s):6.0f} "
+        print(f"{label:22} {len(s):5} {out:7} {100 * rc / max(1, rc + vc):6.0f}% {sum(x['gen_s'] for x in s):6.0f} "
               f"{sum(x['prefill_s'] for x in s):6.0f} {sum(x['model_s'] for x in s):7.0f} {sum(x['tool_s'] for x in s):6.0f} "
-              f"{writes:10} {(max(app_steps) if app_steps else 0):12} {spec}")
+              f"{writes:10} {(max(app_steps) if app_steps else 0):12} {spec} regressions={regressions_caught(s)}")
         for x in s:
             total_kind_out[x["kind"]] += x["out"]
             total_kind_n[x["kind"]] += 1

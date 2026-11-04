@@ -4,6 +4,9 @@ Only "starts and quits without an error" is checked here; what the program does 
 of tests and contract scenarios.
 """
 
+import ast
+import functools
+import importlib
 import os
 import shutil
 import subprocess
@@ -97,6 +100,141 @@ def tui(ws: Path, names: dict, run_dir: Path | None = None, timeout: int = 30) -
                 detail += f"\n(file contents: {content[:300]})"
             results.append(SmokeResult(False, case, detail))
     return results
+
+
+# Names a Textual subclass is meant to define: handlers, hooks and class-level settings.
+OVERRIDES = {"compose", "render", "BINDINGS", "CSS", "CSS_PATH", "DEFAULT_CSS", "TITLE", "SUB_TITLE", "SCREENS",
+             "MODES", "COMMANDS", "AUTO_FOCUS", "can_focus", "can_focus_children", "check_action"}
+OVERRIDE_PREFIXES = ("on_", "action_", "watch_", "validate_", "compute_", "key_", "_on_", "_watch_")
+
+
+@functools.cache
+def _textual_names(cls: type) -> tuple[frozenset[str], frozenset[str]]:
+    """(every name a cls instance has, the reactives among them). Instance names include attributes
+    set in __init__ (like App._running), so it tries an instance first."""
+    from textual.reactive import Reactive
+
+    try:
+        names = set(dir(cls()))
+    except Exception:  # noqa: BLE001 - a base that needs arguments: its class names will do
+        names = set(dir(cls))
+    reactives = {k for c in cls.__mro__ for k, v in vars(c).items() if isinstance(v, Reactive)}
+    return frozenset(names), frozenset(reactives)
+
+
+def _textual_bases(tree: ast.Module) -> dict[str, type]:
+    """Classes in the module whose bases resolve to a Textual App, Screen or Widget → that Textual class."""
+    from textual.app import App
+    from textual.widget import Widget  # Screen is a Widget
+
+    imported: dict[str, str] = {}  # local name → dotted textual path
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("textual"):
+            for a in node.names:
+                imported[a.asname or a.name] = f"{node.module}.{a.name}"
+        elif isinstance(node, ast.Import):
+            for a in node.names:
+                if a.name.startswith("textual"):
+                    imported[a.asname or a.name.split(".")[0]] = a.asname and a.name or a.name.split(".")[0]
+
+    def lookup(dotted: str):
+        parts = dotted.split(".")
+        for i in range(len(parts), 0, -1):
+            try:
+                obj = importlib.import_module(".".join(parts[:i]))
+            except ImportError:
+                continue
+            for attr in parts[i:]:
+                obj = getattr(obj, attr, None)
+            return obj
+        return None
+
+    def dotted(expr) -> str | None:
+        if isinstance(expr, ast.Name):
+            return expr.id
+        if isinstance(expr, ast.Attribute) and (head := dotted(expr.value)):
+            return f"{head}.{expr.attr}"
+        return None
+
+    classes = {n.name: n for n in tree.body if isinstance(n, ast.ClassDef)}
+    found: dict[str, type] = {}
+
+    def resolve(cls: ast.ClassDef, seen=()) -> type | None:
+        for base in cls.bases:
+            name = dotted(base)
+            if name is None:
+                continue
+            head, _, rest = name.partition(".")
+            if head in classes and not rest and head not in seen:
+                if (hit := resolve(classes[head], (*seen, head))) is not None:
+                    return hit
+            elif head in imported:
+                obj = lookup(imported[head] + ("." + rest if rest else ""))
+                if isinstance(obj, type) and issubclass(obj, (App, Widget)):
+                    return obj
+        return None
+
+    for name, cls in classes.items():
+        if (hit := resolve(cls)) is not None:
+            found[name] = hit
+    return found
+
+
+def _own_names(cls: ast.ClassDef) -> list[tuple[str, str]]:
+    """(name, how) for what the class defines: methods, class attributes and self.X assignments."""
+    out, reactives = [], set()
+    for node in cls.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            out.append((node.name, "method"))
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
+        for t in targets:
+            if isinstance(t, ast.Name):
+                value = node.value
+                call = value.func if isinstance(value, ast.Call) else None
+                fname = call.id if isinstance(call, ast.Name) else call.attr if isinstance(call, ast.Attribute) else ""
+                if fname in ("reactive", "var", "Reactive"):
+                    reactives.add(t.id)
+                else:
+                    out.append((t.id, "class"))
+
+    def walk(node):
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.ClassDef):
+                continue
+            targets = child.targets if isinstance(child, ast.Assign) else [child.target] if isinstance(child, ast.AnnAssign) else []
+            flat = [e for t in targets for e in (t.elts if isinstance(t, (ast.Tuple, ast.List)) else [t])]
+            for t in flat:
+                if isinstance(t, ast.Attribute) and isinstance(t.value, ast.Name) and t.value.id == "self":
+                    out.append((t.attr, "self"))
+            walk(child)
+
+    walk(cls)
+    return [(n, how) for n, how in dict.fromkeys(out) if n not in reactives]
+
+
+def clashes(ws: Path, names: dict) -> list[str]:
+    """Warnings for names the app's Textual subclasses set or define that Textual's base already
+    uses (e.g. self._running on an App): those silently break the app. Never blocks."""
+    path = ws / f"{names['module']}.py"
+    try:
+        tree = ast.parse(path.read_text())
+    except (OSError, SyntaxError, ValueError):
+        return []
+    classes = {n.name: n for n in tree.body if isinstance(n, ast.ClassDef)}
+    warnings = []
+    for cls_name, base in _textual_bases(tree).items():
+        taken, reactives = _textual_names(base)
+        seen = set()
+        for name, how in _own_names(classes[cls_name]):
+            if (name in seen or name not in taken or name in reactives or name in OVERRIDES
+                    or name.startswith(OVERRIDE_PREFIXES) or name.isupper() or (name.startswith("__") and name.endswith("__"))):
+                continue
+            seen.add(name)
+            what = {"self": f"sets self.{name}", "method": f"defines {name}()", "class": f"defines {name}"}[how]
+            hint = f"self.my_{name.lstrip('_')}" if how != "method" else f"my_{name.lstrip('_')}()"
+            warnings.append(f"warning: {cls_name} {what}, which Textual's {base.__name__} already uses; "
+                            f"rename it (e.g. {hint}).")
+    return warnings
 
 
 def summarize(results: list[SmokeResult], target: str) -> str:

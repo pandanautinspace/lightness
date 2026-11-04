@@ -526,3 +526,60 @@ def test_try_app_fake_clock_and_advance(tmp_path):
     assert "after advance:3:\n  (nothing changed)" in out  # paused: time doesn't count
     out = try_app(tmp_path, {**names, "params": []}, "advance:5")
     assert "advance needs a clock parameter, and StopwatchApp has none" in out
+
+
+CLASHING = """\
+from textual import widgets
+from textual.app import App, ComposeResult
+from textual.reactive import reactive
+from textual.widgets import Static
+
+
+class Cell(widgets.Static):
+    def __init__(self) -> None:
+        super().__init__()
+        self.visible = True
+
+
+class TimerApp(App):
+    BINDINGS = [("space", "toggle", "Start/stop")]
+    CSS = "Static { height: 1; }"
+    elapsed = reactive(0.0)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._running = False
+        self.title = "Timer"
+        self.laps = []
+
+    def compose(self) -> ComposeResult:
+        yield Static(id="time")
+
+    def on_mount(self) -> None:
+        self.elapsed = 0.0
+
+    def action_toggle(self) -> None:
+        self._running = not self._running
+"""
+
+
+def test_start_check_warns_about_names_textual_already_uses(tmp_path):
+    from lightness.kits.smoke import clashes
+
+    (tmp_path / "timer.py").write_text(CLASHING)
+    warnings = clashes(tmp_path, {"module": "timer"})
+    assert warnings == [
+        "warning: Cell sets self.visible, which Textual's Static already uses; rename it (e.g. self.my_visible).",
+        "warning: TimerApp sets self._running, which Textual's App already uses; rename it (e.g. self.my_running).",
+    ]  # not compose, on_mount, BINDINGS, CSS, a reactive of its own, or App's title reactive
+
+
+def test_start_check_has_no_warnings_for_the_shell_and_parts(tmp_path):
+    from lightness.kits.smoke import clashes
+
+    for name in SHELL_NAMES:
+        (tmp_path / "app.py").write_text(render_shell(load_kit("tui"), SHELL_NAMES[name]))
+        assert clashes(tmp_path, {"module": "app"}) == [], name
+    for p in load_kit("tui").parts:
+        (tmp_path / "app.py").write_text(p.path.read_text())
+        assert clashes(tmp_path, {"module": "app"}) == [], p.name

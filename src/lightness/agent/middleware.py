@@ -268,10 +268,11 @@ class Kit(Middleware):
         results = smoke.tui(ctx.ws, names, ctx.run_dir)
         if not results:
             return None
-        text = smoke.summarize(results, f"{names['module']}.py")
+        warnings = smoke.clashes(ctx.ws, names)
+        text = "\n".join([smoke.summarize(results, f"{names['module']}.py"), *warnings])
         previous, ctx.data["kit.smoke"] = ctx.data.get("kit.smoke"), text
-        ctx.log("smoke", ok=all(r.ok for r in results))
-        if text == previous or (previous is None and all(r.ok for r in results)):
+        ctx.log("smoke", ok=all(r.ok for r in results), warnings=len(warnings))
+        if text == previous or (previous is None and all(r.ok for r in results) and not warnings):
             return None  # only report changes (and never an initial "fine")
         return shorten_paths("[automatic start check] " + text, ctx.ws, ctx.run_dir)
 

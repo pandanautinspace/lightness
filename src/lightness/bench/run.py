@@ -60,40 +60,63 @@ def make_agent(name: str, model: str | None):
     raise typer.BadParameter(f"unknown agent {name}")
 
 
-def verify(task: Task, ws: Path, run_dir: Path) -> dict:
-    """Run hidden tests against a scratch copy of the workspace. Agent never sees tests/."""
+TEST_TIMEOUT = 20  # seconds per hidden test; a test that hangs fails alone
+
+
+def verify(task: Task, ws: Path, run_dir: Path, test_timeout: float = TEST_TIMEOUT) -> dict:
+    """Run hidden tests against a scratch copy of the workspace. Agent never sees tests/.
+
+    Each test runs in its own pytest process with its own timeout, so one hanging test fails
+    without taking the others down with it."""
     vdir = run_dir.resolve() / "verify"
     vws = vdir / "workspace"
     shutil.copytree(ws, vws)
     shutil.copytree(task.tests, vdir / "tests")
-    report = vdir / "report.xml"
+    reports = vdir / "reports"
+    reports.mkdir()
     # Hidden tests execute agent-written code, so they run sandboxed too.
     env = os.environ | bench_env() | sandbox.sandbox_env(vdir) | {"BENCH_WORKSPACE": str(vws)}
-    try:
-        proc = subprocess.run(
-            [*sandbox.sandbox_prefix(vdir),
-             sys.executable, "-m", "pytest", "tests", "-q", "-p", "no:cacheprovider", f"--junitxml={report}"],
-            cwd=vdir, env=env, capture_output=True, text=True, timeout=task.verify_timeout_sec,
-        )
-        (vdir / "pytest.log").write_text(proc.stdout + proc.stderr)
-    except subprocess.TimeoutExpired:
+
+    def pytest(args: list[str], timeout: float) -> subprocess.CompletedProcess | None:
+        try:
+            return subprocess.run([*sandbox.sandbox_prefix(vdir), sys.executable, "-m", "pytest", *args,
+                                   "-q", "-p", "no:cacheprovider"],
+                                  cwd=vdir, env=env, capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return None
+
+    collected = pytest(["tests", "--collect-only"], task.verify_timeout_sec)
+    if collected is None:
         return {"pass": False, "verify_error": "timeout", "tests_total": 0, "tests_passed": 0}
-    if not report.exists():
+    ids = [line for line in collected.stdout.splitlines() if "::" in line and not line.startswith(" ")]
+    log, cases = [], []  # cases: (name, ok)
+    if collected.returncode != 0 or not ids:  # collection errors: one run, so they show up as errors
+        ids = ["tests"]
+    for i, node in enumerate(ids):
+        report = reports / f"{i}.xml"
+        proc = pytest([node, f"--junitxml={report}"], test_timeout if node != "tests" else task.verify_timeout_sec)
+        if proc is None:
+            log.append(f"{node} TIMEOUT after {test_timeout}s")
+            cases.append((node.rpartition("::")[2], False))
+            continue
+        log.append(proc.stdout + proc.stderr)
+        if report.exists():
+            for case in ET.parse(report).getroot().iter("testcase"):
+                ok = not any(child.tag in ("failure", "error", "skipped") for child in case)
+                cases.append((case.get("name", ""), ok))
+    (vdir / "pytest.log").write_text("\n".join(log))
+    if not cases:
         return {"pass": False, "verify_error": "no report", "tests_total": 0, "tests_passed": 0}
 
-    total = passed = intent_total = intent_passed = 0
-    for case in ET.parse(report).getroot().iter("testcase"):
-        ok = not any(child.tag in ("failure", "error", "skipped") for child in case)
-        is_intent = case.get("name", "").startswith("test_intent_")
-        total += 1
-        passed += ok
-        intent_total += is_intent
-        intent_passed += ok and is_intent
+    total = len(cases)
+    passed = sum(ok for _, ok in cases)
+    intent_total = sum(name.startswith("test_intent_") for name, _ in cases)
+    intent_passed = sum(ok and name.startswith("test_intent_") for name, ok in cases)
     return {
-        "pass": total > 0 and passed == total,
+        "pass": passed == total,
         "tests_total": total,
         "tests_passed": passed,
-        "test_fraction": passed / total if total else 0.0,
+        "test_fraction": passed / total,
         "intent_total": intent_total,
         "intent_passed": intent_passed,
     }

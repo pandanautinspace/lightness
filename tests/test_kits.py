@@ -583,3 +583,9 @@ def test_start_check_has_no_warnings_for_the_shell_and_parts(tmp_path):
     for p in load_kit("tui").parts:
         (tmp_path / "app.py").write_text(p.path.read_text())
         assert clashes(tmp_path, {"module": "app"}) == [], p.name
+
+
+def test_headless_test_part_passes_its_own_tests():
+    proc = subprocess.run([sys.executable, "-m", "pytest", str(TUI / "parts" / "headless_test.py"), "-q",
+                           "-p", "no:cacheprovider"], capture_output=True, text=True, timeout=120, check=False)
+    assert proc.returncode == 0, proc.stdout[-2000:]

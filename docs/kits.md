@@ -216,9 +216,9 @@ logged yet): none ≈ $12, first ≈ $12, after ≈ $16 for 27 runs each.
   requests per run (returned as empty replies and asked again), and ~0.1–0.2 calls per run
   stalled and were retried. One 15-minute Parley stall hit the smoke runs before the A/B.
 
-**Recommendation:** make **first** the candidate default, but don't switch yet (out of scope
-for this milestone): confirm it on Haiku 5.5 (about a tenth of the cost per run) with more
-runs per task, then on the local 35B and 9B. Drop **after**: it costs most and scores lowest.
+**Recommendation (Haiku 4.5 alone):** first as the candidate default, to be confirmed on
+Haiku 5.5. Drop **after**: it costs most and scores lowest. The Haiku 5.5 confirmation below
+did not reproduce the lead; see its recommendation.
 
 **Milestone-2 changes in effect for all arms:** per-test grader timeout (csv-browser was 0/0 on
 every hosted model; it now grades normally); format-error message shows a try call instead of
@@ -245,3 +245,78 @@ Textual app rather than one bench task:
 
 None of these mention a bench task's fields, keys or file formats. The one task-shaped
 datum is in this report's tables, not in any kit text.
+
+### Confirmation: none vs first on Haiku 5.5, 2026-11-04
+
+Same setup as above (code at `4cd2bbf`), `--model haiku55` (claude-haiku-5-5 via Parley),
+none and first only, 9 tasks × 3 runs per arm (54 runs). Moderation blocks were asked again up
+to 5 times per step. Batches: `runs/kit-tui-20261104-160452-mw-env.guard.kit-tests.{none,first}-haiku55-*`.
+
+| metric | none | first |
+|---|---|---|
+| hidden spec tests passed, % | 94.6 (91.4–96.8) | 94.3 (84.9–98.9) |
+| hidden intent tests passed, % | 33.3 (30.8–34.6) | 24.4 (15.4–30.8) |
+| runs passing every hidden test (of 9) | 0.0 (0.0–0.0) | 0.3 (0.0–1.0) |
+| output tokens per run | 13337 (11926–15380) | 14182 (10590–19062) |
+| agent wall time per run, s | 437 (381–530) | 445 (240–679) |
+| steps per run | 53 (46–67) | 60 (31–102) |
+| steps after the last app change | 47 (40–60) | 53 (24–95) |
+| regressions caught (per sweep of 9) | 0.0 (0.0–0.0) | 0.0 (0.0–0.0) |
+| runs that hit the step or wall limit (of 9) | 1.7 (1.0–2.0) | 2.7 (1.0–5.0) |
+| infrastructure: empty replies per run | 33.1 (28.8–35.6) | 22.4 (18.1–26.6) |
+| infrastructure: calls ≥ 60 s (timed out and retried) per run | 0.07 (0.00–0.22) | 0.04 (0.00–0.11) |
+
+Output tokens per run by step kind (mean over all runs; time in s in brackets):
+
+| kind | none | first |
+|---|---|---|
+| write:app | 2048 (14 s) | 2144 (14 s) |
+| edit:partial | 63 (1 s) | 31 (2 s) |
+| write:test | 0 (0 s) | 618 (6 s) |
+| edit:test | 0 (0 s) | 0 (0 s) |
+| run:try | 5619 (312 s) | 3803 (200 s) |
+| run:pytest | 0 (0 s) | 203 (24 s) |
+| run:python-snippet | 497 (14 s) | 3259 (100 s) |
+| read:workspace | 89 (7 s) | 168 (9 s) |
+| other | 592 (59 s) | 778 (58 s) |
+
+Per task: hidden spec tests passed (sum over runs) · intent · runs at a limit
+
+| task | none | first |
+|---|---|---|
+| airport-lookup | 33/33 · 0/9 · 1 | 33/33 · 0/9 · 1 |
+| bookmarks | 33/33 · 0/9 · 1 | 33/33 · 0/9 · 1 |
+| csv-browser | 30/33 · 0/9 · 2 | 30/33 · 0/9 · 0 |
+| json-viewer | 18/30 · 8/9 · 0 | 28/30 · 6/9 · 1 |
+| lights-out | 27/27 · 6/9 · 0 | 27/27 · 6/9 · 3 |
+| loan-calc | 33/33 · 6/9 · 0 | 22/33 · 4/9 · 1 |
+| notepad | 33/33 · 0/6 · 0 | 33/33 · 0/6 · 0 |
+| stopwatch | 24/24 · 3/9 · 0 | 24/24 · 0/9 · 0 |
+| trip-split | 33/33 · 3/9 · 1 | 33/33 · 3/9 · 1 |
+
+Run cost from the logged tokens (cache reads $0.01, cache writes $0.125, uncached input $0.10,
+output $0.50 per MTok; cache rates assumed at the usual 0.1× / 1.25× of input): none $0.83,
+first $0.85 for 27 runs each, about $0.03 per run (Haiku 4.5: ~$0.45).
+
+**Findings**
+
+- **The lead did not replicate.** Spec tests: none 94.6% (91–97), first 94.3% (85–99). first
+  varied more between sweeps, scored lower on intent tests (24% vs 33%) and hit the step limit
+  more often (8 runs vs 5).
+- **One per-task difference repeats on both models: json-viewer** (first 28/30 vs none 18/30
+  here; 28/30 vs 15/30 on Haiku 4.5). On Haiku 5.5, first lost loan-calc (22/33 vs 33/33).
+- Haiku 5.5 beats Haiku 4.5 in every arm (spec 94–95% vs 81–91%, intent 24–33% vs 13–21%)
+  with fewer steps (53–60 vs 75–97) and about a fifteenth of the cost.
+- In first, Haiku 5.5 wrote little test code (0.6k tokens of test files and 34 pytest runs over
+  27 runs, against 7.4k and 114 for Haiku 4.5); much of its work went through python snippets.
+  Regressions caught were again 0.
+- Steps after the last app change are high (47–53 of 53–60), partly because app edits made
+  through python snippets aren't counted as app changes by `analyze_cost.py`; treat that row as
+  an upper bound.
+- Moderation blocks were higher than on Haiku 4.5 (22–33 per run, asked again up to 5 times).
+
+**Recommendation:** keep **none** as the default. On Haiku 5.5, first costs the same, scores
+the same on spec tests, lower on intent tests, and is less predictable; its Haiku 4.5 lead
+looks like a model-specific effect. Worth following up: why first helps json-viewer on both
+models (likely the tests pin the tree/detail contract early). Next confirmation is on the
+local 35B and 9B, where the cost question doesn't arise.

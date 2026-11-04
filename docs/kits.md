@@ -129,3 +129,119 @@ Shared across kits: json-store and sqlite-store, validation helpers, table/repor
   (9B: ~140k) against 14–35k for the app. The notes and the headless_test part push
   "cover every scenario" and the model rewrites whole test files. Next: harness-owned
   contract scenarios, so the model supplies data, not test code.
+
+### Testing arms A/B: Haiku 4.5, kit-tui, 2026-11-04 (milestone 2)
+
+Question: should the model write tests, and when? Three arms, chosen by `bench --tests`
+(everything else identical, including the milestone-2 fixes below):
+
+- **none (A):** notes say check the real app with the try command after each change; write
+  tests only if the task asks.
+- **first (B):** notes say write tests from the contract before the app, then build until they
+  pass; the headless_test part is shown from the start.
+- **after (C):** like none, but the first submit is refused with "write tests for the task's
+  contract, run them, fix what fails, then submit" plus the headless_test part.
+
+Setup: `mw:env,guard,kit`, Haiku 4.5 via Parley, the 9 blind kit-tui tasks × 3 runs per arm
+(81 runs), step limit 150, wall limit 1800 s, each hidden test with its own 20 s timeout.
+Each number is averaged over a sweep (one run of every task), then shown as the mean over the
+3 sweeps with the min–max across sweeps. Batches:
+`runs/kit-tui-20261104-150141-mw-env.guard.kit-tests.{none,first,after}-haiku-*`.
+Reproduce with `scripts/arm_report.py none=… first=… after=…`.
+
+| metric | none | first | after |
+|---|---|---|---|
+| hidden spec tests passed, % | 84.9 (78.5–94.6) | 91.0 (87.1–94.6) | 81.0 (74.2–89.2) |
+| hidden intent tests passed, % | 16.7 (11.5–19.2) | 12.8 (11.5–15.4) | 20.5 (19.2–23.1) |
+| runs passing every hidden test (of 9) | 0.0 (0.0–0.0) | 0.0 (0.0–0.0) | 0.0 (0.0–0.0) |
+| output tokens per run | 18889 (14651–21236) | 22931 (21827–24185) | 28737 (26192–30162) |
+| agent wall time per run, s | 630 (606–656) | 556 (525–595) | 743 (650–847) |
+| steps per run | 86 (84–86) | 75 (73–76) | 97 (94–100) |
+| steps after the last app change | 54 (45–64) | 34 (29–38) | 57 (51–68) |
+| regressions caught (per sweep of 9) | 0.0 (0.0–0.0) | 0.0 (0.0–0.0) | 0.0 (0.0–0.0) |
+| runs that hit the step or wall limit (of 9) | 0.3 (0.0–1.0) | 0.3 (0.0–1.0) | 1.0 (0.0–2.0) |
+| infrastructure: empty replies per run | 14.5 (11.3–20.1) | 11.5 (10.4–12.4) | 20.3 (16.4–25.0) |
+| infrastructure: calls ≥ 60 s (timed out and retried) per run | 0.07 (0.00–0.22) | 0.19 (0.11–0.22) | 0.19 (0.00–0.33) |
+
+Output tokens per run by step kind (mean over all runs; time in s in brackets):
+
+| kind | none | first | after |
+|---|---|---|---|
+| write:app | 7524 (50 s) | 6937 (53 s) | 8992 (67 s) |
+| edit:partial | 3 (0 s) | 11 (1 s) | 7 (0 s) |
+| write:test | 1929 (22 s) | 7421 (61 s) | 8870 (60 s) |
+| edit:test | 0 (0 s) | 0 (0 s) | 16 (1 s) |
+| run:try | 5480 (414 s) | 2977 (228 s) | 5166 (426 s) |
+| run:pytest | 8 (1 s) | 386 (39 s) | 242 (19 s) |
+| run:python-snippet | 1267 (30 s) | 2507 (56 s) | 2065 (42 s) |
+| read:workspace | 804 (66 s) | 875 (71 s) | 721 (62 s) |
+| other | 697 (39 s) | 695 (40 s) | 1075 (55 s) |
+
+Per task: hidden spec tests passed (sum over runs) · intent · runs at a limit
+
+| task | none | first | after |
+|---|---|---|---|
+| airport-lookup | 33/33 · 0/9 · 0 | 33/33 · 0/9 · 0 | 24/33 · 0/9 · 1 |
+| bookmarks | 32/33 · 0/9 · 1 | 33/33 · 0/9 · 1 | 33/33 · 0/9 · 2 |
+| csv-browser | 29/33 · 0/9 · 0 | 30/33 · 0/9 · 0 | 30/33 · 1/9 · 0 |
+| json-viewer | 15/30 · 3/9 · 0 | 28/30 · 3/9 · 0 | 18/30 · 3/9 · 0 |
+| lights-out | 19/27 · 4/9 · 0 | 26/27 · 0/9 · 0 | 19/27 · 5/9 · 0 |
+| loan-calc | 33/33 · 2/9 · 0 | 31/33 · 4/9 · 0 | 29/33 · 5/9 · 0 |
+| notepad | 33/33 · 0/6 · 0 | 33/33 · 0/6 · 0 | 33/33 · 0/6 · 0 |
+| stopwatch | 12/24 · 1/9 · 0 | 8/24 · 0/9 · 0 | 17/24 · 0/9 · 0 |
+| trip-split | 31/33 · 3/9 · 0 | 32/33 · 3/9 · 0 | 23/33 · 2/9 · 0 |
+
+Run cost at Haiku 4.5 list prices (cache reads + uncached input + output; cache writes were not
+logged yet): none ≈ $12, first ≈ $12, after ≈ $16 for 27 runs each.
+
+**Findings**
+
+- **first** scored the most hidden spec tests (91% vs 85% none, 81% after) with the fewest
+  steps (75 vs 86 and 97), the shortest tail after the last app change (34 steps vs 54 and 57)
+  and the shortest wall time. It spends tokens on tests (7.4k per run) and saves them on try
+  runs (3.0k vs 5.5k). Its sweep range (87–95%) overlaps none's (79–95%), so with 3 runs
+  this is a lead, not a settled result. Big per-task gains: json-viewer 28/30 vs 15/30,
+  lights-out 26/27 vs 19/27; one loss: stopwatch 8/24 vs 12/24.
+- **after** was the most expensive (28.7k output tokens, 743 s, 97 steps, ~$16) and scored
+  lowest on spec tests. Asking for tests at the end mostly adds a test-writing phase; it caught
+  little. It scored best on intent tests (21% vs 17% and 13%), but those are few (26 per sweep).
+- **Regressions caught: 0 in every arm.** The model ran pytest 114 times in first and 58 in
+  after; the pass → app change → fail pattern happened once, and the model then changed the
+  test, not the app. The model's own tests here confirm, they don't catch.
+- **No run passed every hidden test.** Intent tests (unstated preferences) stay low in all arms:
+  no condition asks questions.
+- Limits: the step limit bound in 1–2 runs per arm; the 1800 s wall limit bound once (after,
+  1882 s). Raising the step limit to 150 left most runs submitting on their own (86/75/97 steps).
+- Infrastructure noise, similar across arms: Parley's moderation guardrail blocked ~12–20
+  requests per run (returned as empty replies and asked again), and ~0.1–0.2 calls per run
+  stalled and were retried. One 15-minute Parley stall hit the smoke runs before the A/B.
+
+**Recommendation:** make **first** the candidate default, but don't switch yet (out of scope
+for this milestone): confirm it on Haiku 5.5 (about a tenth of the cost per run) with more
+runs per task, then on the local 35B and 9B. Drop **after**: it costs most and scores lowest.
+
+**Milestone-2 changes in effect for all arms:** per-test grader timeout (csv-browser was 0/0 on
+every hosted model; it now grades normally); format-error message shows a try call instead of
+the submit command (wording is a default, not settled); submit refused while the app crashes on
+start; constructor params as a list with roles (data, input, clock, seed, plus `other` for
+plain values such as lights-out's `board`, which none of the four roles fit); try_app fake clock
+with `advance:S` (it starts at 1000, not 0: a clock at 0 trips `if self.started_at:` checks
+that real monotonic time never triggers); start-check warnings for names Textual already uses.
+Not covered: apps that call `time.monotonic()` directly instead of the injected clock.
+
+**Generalization review.** Every kit text changed in this milestone, and why it holds for any
+Textual app rather than one bench task:
+
+| text | change | general because |
+|---|---|---|
+| `notes.md`, time bullet | read time only through the clock parameter; work out the display from it on each tick; random numbers from `random.Random(seed)`; don't wait long stretches with `set_timer` | Textual fact: timers count real seconds; applies to every timed or random app |
+| `notes.md`, testing bullet | per arm, from `kit.toml [testing]` | a testing rule, no app-specific content |
+| `kit.toml` names | `params` list with roles; `empty_value` / `sample_data` help reworded | describes constructor arguments of any app (files read, files kept, clocks, seeds, other values) |
+| `try.md` | `--file` / `--file-text`, `advance:`, `wait:` is real time, the app's own params listed; dropped "don't write test files" | documents the tool; the params line is rendered from each app's own contract |
+| `parts/headless_test.py` | rewritten around observed mistakes; neutral example app (named counters) | each item is a Textual or pytest fact (asyncio.run, focus, Input vs bindings, ListView rebuild, `_notifications`, fake clock) or a testing rule (expected values from the task) |
+| shell template | renders every param; `# read only`, clock and seed comments; a param named like an App attribute is stored as `<name>_arg` | generated from the contract; the rename avoids a Textual clash for any app |
+| harness messages | format error shows one try call; "Not submitted: the app crashes on start."; "Before submitting: write tests…" (arm after); clash warning "X sets self.Y, which Textual's Z already uses"; try_app's messages for `--data` with several files and `advance` without a clock | about the harness or Textual, never about a task |
+| smoke check | warns on names that clash with Textual's App, Screen or Widget, computed from `dir()` at check time | reported cases (`_running`, `visible`) are examples; the check itself has no list of names |
+
+None of these mention a bench task's fields, keys or file formats. The one task-shaped
+datum is in this report's tables, not in any kit text.

@@ -149,44 +149,78 @@ def test_filter():
     drive(mod.FilterApp(), steps)
 
 
+def params(*specs: str) -> list[dict]:
+    """params("data_path:data:notes.json", "now:clock") → the kit's params list."""
+    out = []
+    for spec in specs:
+        name, role, *file = spec.split(":")
+        out.append({"name": name, "role": role, "file": file[0] if file else ""})
+    return out
+
+
 SHELL_NAMES = {
-    "json": {"module": "notes", "app_class": "NotesApp", "title": "Notes", "storage": "json",
-             "data_arg": "data_path", "data_default": "notes.json", "empty_value": "[]"},
-    "other": {"module": "ledger", "app_class": "LedgerApp", "title": "Ledger", "storage": "other",
-              "data_arg": "db_path", "data_default": "ledger.db", "empty_value": "[]"},
-    "none": {"module": "calc", "app_class": "CalcApp", "title": "Calc", "storage": "none",
-             "data_arg": "", "data_default": "", "empty_value": "[]"},
+    "json": {"module": "notes", "app_class": "NotesApp", "title": "Notes",
+             "params": params("data_path:data:notes.json"), "empty_value": "[]", "sample_data": ""},
+    "other": {"module": "ledger", "app_class": "LedgerApp", "title": "Ledger",
+              "params": params("db_path:data:ledger.db"), "empty_value": "[]", "sample_data": ""},
+    "none": {"module": "calc", "app_class": "CalcApp", "title": "Calc", "params": [], "empty_value": "[]",
+             "sample_data": ""},
+    "mixed": {"module": "lookup", "app_class": "LookupApp", "title": "Lookup",
+              "params": params("places_path:input:places.csv", "saved_path:data:saved.json", "now:clock",
+                               "seed:seed", "size:other"), "empty_value": "{}", "sample_data": ""},
 }
 
 
-@pytest.mark.parametrize("storage", list(SHELL_NAMES))
-def test_shell_renders_and_starts(storage, tmp_path):
-    names = SHELL_NAMES[storage]
+@pytest.mark.parametrize("kind", list(SHELL_NAMES))
+def test_shell_renders_and_starts(kind, tmp_path):
+    names = SHELL_NAMES[kind]
     text = render_shell(load_kit("tui"), names)
-    assert ("import json" in text) == (storage == "json")
-    assert ("DEFAULT_DATA" in text) == (storage != "none")
+    keeps_json = kind in ("json", "mixed")
+    assert ("import json" in text) == keeps_json
+    assert ("from pathlib import Path" in text) == (kind != "none")
     path = tmp_path / f"{names['module']}.py"
     path.write_text(text)
-    spec = importlib.util.spec_from_file_location(f"shell_{storage}", path)
+    spec = importlib.util.spec_from_file_location(f"shell_{kind}", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     app_cls = getattr(mod, names["app_class"])
-    app = app_cls(str(tmp_path / names["data_default"])) if names["data_arg"] else app_cls()
+    files = [p for p in names["params"] if p["role"] in ("data", "input")]
+    app = app_cls(*[str(tmp_path / p["file"]) for p in files])  # positional, in the contract's order
 
     async def steps(app, pilot):
-        if storage == "json":
-            assert app.data == []
-            app.data.append({"x": 1})
+        if keeps_json:
+            assert app.data == json.loads(names["empty_value"])
+            app.data = {"x": 1}
             app.save()
 
     drive(app, steps)
-    if storage == "json":
-        assert mod.load_data(tmp_path / "notes.json") == [{"x": 1}]
+    if kind == "mixed":
+        assert callable(app.now) and hasattr(app.rng, "random") and app.size_arg is None  # App has .size
+        assert mod.load_data(tmp_path / "saved.json") == {"x": 1}
+        assert "Run: python lookup.py [PLACES_PATH] [SAVED_PATH]" in text
+    if kind == "json":
+        assert mod.load_data(tmp_path / "notes.json") == {"x": 1}
 
 
-def test_shell_rejects_unfilled_names():
+def test_shell_main_passes_paths_by_parameter(tmp_path, monkeypatch):
+    path = tmp_path / "lookup.py"
+    path.write_text(render_shell(load_kit("tui"), SHELL_NAMES["mixed"]))
+    spec = importlib.util.spec_from_file_location("shell_main", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    made = []
+    monkeypatch.setattr(mod.LookupApp, "run", lambda self: made.append(self))
+    mod.main(["a.csv", "b.json"])
+    mod.main([])
+    assert (str(made[0].places_path), str(made[0].saved_path)) == ("a.csv", "b.json")
+    assert (str(made[1].places_path), str(made[1].saved_path)) == ("places.csv", "saved.json")
+
+
+def test_shell_rejects_bad_names():
     with pytest.raises((ValueError, KeyError)):
-        render_shell(load_kit("tui"), {"module": "x", "storage": "none"})
+        render_shell(load_kit("tui"), {"module": "x", "params": []})
+    with pytest.raises(ValueError):
+        render_shell(load_kit("tui"), {**SHELL_NAMES["none"], "params": params("a:data", "a:input")})
 
 
 def test_periodic_refresh_with_fake_clock():
@@ -382,7 +416,7 @@ def try_app(ws: Path, names: dict, *args: str) -> str:
 
 def test_try_app_shows_list_highlight_and_data_file(tmp_path):
     (tmp_path / "bookmarks.py").write_text((KITS_DIR / "tui" / "parts" / "list_actions.py").read_text())
-    out = try_app(tmp_path, {"module": "bookmarks", "app_class": "ListActionsApp", "storage": "none"},
+    out = try_app(tmp_path, {"module": "bookmarks", "app_class": "ListActionsApp", "params": []},
                   "focus:#items", "press:down,s", "press:x")
     assert "#items list, highlighted=0:\n    [0] example.org\n    [1] python.org" in out
     assert "after press:down,s:\n  #items list, highlighted=1:\n    [0] example.org\n    [1] ★ python.org" in out
@@ -393,8 +427,8 @@ def test_try_app_data_file_restart_and_quit(tmp_path):
     names = SHELL_NAMES["json"]
     (tmp_path / "notes.py").write_text(render_shell(load_kit("tui"), names))
     out = try_app(tmp_path, names, "--data", '[{"x": 1}]', "restart", "press:ctrl+q")
-    assert 'data file: [{"x": 1}]' in out
-    assert "after restart (same data file):" in out
+    assert 'data_path file: [{"x": 1}]' in out
+    assert "after restart (same files):" in out
     assert "the app exited" in out
     assert not list((tmp_path / ".lightness").glob("try-*"))  # temp data cleaned up
 
@@ -402,20 +436,20 @@ def test_try_app_data_file_restart_and_quit(tmp_path):
 def test_try_app_grid_modal_and_crash(tmp_path):
     parts = KITS_DIR / "tui" / "parts"
     (tmp_path / "lights.py").write_text((parts / "grid_game.py").read_text())
-    out = try_app(tmp_path, {"module": "lights", "app_class": "LightsApp", "storage": "none"}, "press:space")
+    out = try_app(tmp_path, {"module": "lights", "app_class": "LightsApp", "params": []}, "press:space")
     assert "#board grid 3 wide:\n    cursor+on on        .\n    on        .         ." in out
     (tmp_path / "titles.py").write_text((parts / "modal.py").read_text())
-    out = try_app(tmp_path, {"module": "titles", "app_class": "ModalApp", "storage": "none"}, "press:e")
+    out = try_app(tmp_path, {"module": "titles", "app_class": "ModalApp", "params": []}, "press:e")
     assert "(now on EditScreen)" in out and "#edit-value input: 'untitled'" in out
     (tmp_path / "broken.py").write_text("from textual.app import App\nclass B(App):\n    def on_mount(self):\n"
                                         "        raise RuntimeError('boom')\n")
-    out = try_app(tmp_path, {"module": "broken", "app_class": "B", "storage": "none"})
+    out = try_app(tmp_path, {"module": "broken", "app_class": "B", "params": []})
     assert "CRASH:" in out and "RuntimeError: boom" in out and "broken.py" in out
 
 
 def test_try_app_unknown_widget_is_not_a_crash(tmp_path):
     (tmp_path / "bookmarks.py").write_text((KITS_DIR / "tui" / "parts" / "list_actions.py").read_text())
-    out = try_app(tmp_path, {"module": "bookmarks", "app_class": "ListActionsApp", "storage": "none"},
+    out = try_app(tmp_path, {"module": "bookmarks", "app_class": "ListActionsApp", "params": []},
                   "focus:#nope", "focus:#items")
     assert "no widget matches '#nope' on this screen; ids here: #items, #new-item" in out
     assert "CRASH" not in out and "focus: #items" in out
@@ -424,20 +458,71 @@ def test_try_app_unknown_widget_is_not_a_crash(tmp_path):
 def test_try_app_documented_input_replace_works(tmp_path):
     assert "press:end,ctrl+u" in (KITS_DIR / "tui" / "try.md").read_text()
     (tmp_path / "conv.py").write_text((KITS_DIR / "tui" / "parts" / "input_form.py").read_text())
-    out = try_app(tmp_path, {"module": "conv", "app_class": "ConverterApp", "storage": "none"},
+    out = try_app(tmp_path, {"module": "conv", "app_class": "ConverterApp", "params": []},
                   "type:12", "focus:#amount", "press:end,ctrl+u", "type:3")
     assert "after type:3:\n  #amount input: '3'" in out
 
 
-def test_try_app_passes_an_input_file_even_without_storage(tmp_path):
+TWO_FILES = """\
+import json
+from pathlib import Path
+from textual.app import App
+from textual.widgets import Static
+
+
+class Both(App):
+    BINDINGS = [("a", "add", "Add")]
+
+    def __init__(self, places_path="places.csv", saved_path="saved.json"):
+        super().__init__()
+        self.places = Path(places_path).read_text().split()
+        self.saved_path = Path(saved_path)
+
+    def compose(self):
+        yield Static(" ".join(self.places), id="places")
+
+    def action_add(self):
+        self.saved_path.write_text(json.dumps(self.places[:1]))
+"""
+
+
+def test_try_app_gives_a_two_file_app_both_files(tmp_path):
+    (tmp_path / "both.py").write_text(TWO_FILES)
+    (tmp_path / "places.csv").write_text("ams\nber\n")  # the project's input file: copied by default
+    names = {"module": "both", "app_class": "Both",
+             "params": params("places_path:input:places.csv", "saved_path:data:saved.json")}
+    out = try_app(tmp_path, names, "press:a")
+    assert "places_path: a copy of the project's places.csv; saved_path: no file yet" in out
+    assert "#places: 'ams ber'" in out and "saved_path file: (not created)" in out
+    assert 'after press:a:\n  saved_path file: ["ams"]' in out
+    out = try_app(tmp_path, names, "--file-text", "places_path=osl", "--file-text", 'saved_path=["x"]')
+    assert "#places: 'osl'" in out and 'saved_path file: ["x"]' in out
+    out = try_app(tmp_path, names, "--data", "x")
+    assert "--data/--data-from need exactly one file parameter" in out and "--file NAME=PATH" in out
+    out = try_app(tmp_path, names, "--file", "nope=x")
+    assert "NAME one of the App's file parameters: places_path, saved_path" in out
+
+
+def test_try_app_gives_an_input_only_app_its_file(tmp_path):
     (tmp_path / "viewer.py").write_text(
         "from pathlib import Path\nfrom textual.app import App\nfrom textual.widgets import Static\n\n\n"
-        "class V(App):\n    def __init__(self, json_path=None):\n        super().__init__()\n"
-        "        self.text = Path(json_path).read_text() if json_path else '(no file)'\n\n"
+        "class V(App):\n    def __init__(self, json_path='doc.json'):\n        super().__init__()\n"
+        "        self.text = Path(json_path).read_text()\n\n"
         "    def compose(self):\n        yield Static(self.text, id='body')\n")
     (tmp_path / "in.json").write_text('{"a": 1}')
-    names = {"module": "viewer", "app_class": "V", "storage": "none", "data_arg": "json_path"}
+    names = {"module": "viewer", "app_class": "V", "params": params("json_path:input:doc.json")}
     out = try_app(tmp_path, names, "--data-from", "in.json")
+    assert "#body: '{\"a\": 1}'" in out and "json_path file" not in out  # input files aren't data files
+    out = try_app(tmp_path, names, "--file", "json_path=in.json")
     assert "#body: '{\"a\": 1}'" in out
-    out = try_app(tmp_path, {**names, "data_arg": ""}, "--data", "x")
-    assert "--data/--data-from ignored" in out
+
+
+def test_try_app_fake_clock_and_advance(tmp_path):
+    (tmp_path / "watch.py").write_text((KITS_DIR / "tui" / "parts" / "periodic_refresh.py").read_text())
+    names = {"module": "watch", "app_class": "StopwatchApp", "params": params("now:clock")}
+    out = try_app(tmp_path, names, "press:space", "advance:5", "press:space", "advance:3")
+    assert "now: a fake clock" in out
+    assert "after advance:5:\n  #display digits: '00:05.0'" in out
+    assert "after advance:3:\n  (nothing changed)" in out  # paused: time doesn't count
+    out = try_app(tmp_path, {**names, "params": []}, "advance:5")
+    assert "advance needs a clock parameter, and StopwatchApp has none" in out

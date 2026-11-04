@@ -2,11 +2,14 @@
 
 Copied into the workspace by the harness; the model runs it instead of writing test code.
 
-    python .lightness/kit/try_app.py [--data TEXT | --data-from PATH] [--kw NAME=VALUE ...] STEP ...
+    python .lightness/kit/try_app.py [--file NAME=PATH] [--file-text NAME=TEXT] [--kw NAME=VALUE] STEP ...
 
-Steps: type:TEXT  press:KEY[,KEY...]  click:#id  focus:#id  wait:SECONDS  restart
-After the start and after each step it prints what changed: visible widgets, focus, screen,
-notifications, the data file, and any crash.
+Steps: type:TEXT  press:KEY[,KEY...]  click:#id  focus:#id  wait:SECONDS  advance:SECONDS  restart
+After the start and after each step it prints what changed (visible widgets, focus, screen,
+notifications, any crash) and the contents of each data file the app keeps.
+
+Each file parameter of the App gets a fresh path. A clock parameter gets a fake clock, which only
+moves on advance:SECONDS.
 """
 
 import argparse
@@ -14,6 +17,7 @@ import ast
 import asyncio
 import importlib
 import json
+import math
 import shutil
 import sys
 import tempfile
@@ -21,6 +25,7 @@ import traceback
 from pathlib import Path
 
 ROWS = 15  # rows shown per list/table
+FILE_ROLES = ("data", "input")
 TEXT = 300  # characters shown per text value
 
 CONTAINERS = ("ListView", "DataTable", "Tree", "TextArea", "Input", "Select", "Checkbox", "Switch",
@@ -120,7 +125,7 @@ def grid(widget) -> list[str] | None:
     return [f"{name(widget)} grid {cols} wide:"] + rows(lines)
 
 
-def snapshot(app, data_path: Path | None) -> dict[str, list[str]]:
+def snapshot(app) -> dict[str, list[str]]:
     """What the user would see, as blocks keyed by what they describe."""
     out: dict[str, list[str]] = {}
 
@@ -157,8 +162,6 @@ def snapshot(app, data_path: Path | None) -> dict[str, list[str]]:
     notes = [plain(n.message) or str(n.message) for n in app._notifications]
     if notes:
         add("notifications", [f"notifications: {notes}"])
-    if data_path is not None:
-        add("data file", [f"data file: {file_text(data_path)}"])
     return out
 
 
@@ -176,13 +179,53 @@ def file_text(path: Path) -> str:
         return cut(repr(text)) if text.strip() else "(empty)"
 
 
+def files_now(data_files: dict[str, Path]) -> list[str]:
+    return [file_text(path) for path in data_files.values()]
+
+
+def show_files(data_files: dict[str, Path]) -> None:
+    for param, path in data_files.items():
+        print(f"  {param} file: {file_text(path)}")
+
+
+class FakeClock:
+    """The App's clock parameter: a zero-argument callable returning seconds. Moves only on advance."""
+
+    def __init__(self, t: float = 1000.0) -> None:
+        self.t = t
+
+    def __call__(self) -> float:
+        return self.t
+
+
+def timer_period(app) -> float:
+    """The longest period of the running repeating timers (set_interval) on the app, its screens
+    and widgets, capped at a second: long enough for each of them to tick once."""
+    periods = [0.0]
+    for screen in app.screen_stack:
+        for node in [app, screen, *screen.walk_children()]:
+            for timer in list(getattr(node, "_timers", ())):
+                if timer._repeat != 0 and timer._active.is_set():
+                    periods.append(timer._interval)
+    return min(1.0, max(periods))
+
+
+async def advance(app, pilot, clock: FakeClock, seconds: float) -> None:
+    """Move the fake clock forward in up to 10 slices; after each slice, wait (real time) one period
+    of the app's timers so their callbacks run and read the new time."""
+    slices = max(1, min(10, math.ceil(seconds)))
+    for _ in range(slices):
+        clock.t += seconds / slices
+        await pilot.pause(timer_period(app) + 0.05)
+
+
 def show(state: dict[str, list[str]]) -> None:
     for lines in state.values():
         for line in lines:
             print("  " + line)
 
 
-def show_changes(before: dict[str, list[str]], after: dict[str, list[str]]) -> None:
+def show_changes(before: dict[str, list[str]], after: dict[str, list[str]], files_changed: bool = False) -> None:
     if before.get("screen") != after.get("screen"):
         print(f"  (now on {after['screen'][0][8:] if 'screen' in after else 'the main screen'})")
         show(after)
@@ -197,7 +240,7 @@ def show_changes(before: dict[str, list[str]], after: dict[str, list[str]]) -> N
         if key not in after:
             changed = True
             print(f"  {key}: (no longer shown)")
-    if not changed:
+    if not changed and not files_changed:
         print("  (nothing changed)")
 
 
@@ -208,18 +251,19 @@ def crash_text() -> str:
     return "\n".join("  " + line for line in keep[-6:])
 
 
-async def run(cls, args_for_app, kw, data_path, steps) -> int:
+async def run(cls, kw, data_files: dict[str, Path], clock: FakeClock | None, steps) -> int:
     pending = list(steps)
     print("started:")
     while True:
         restart = False
         app = None
         try:
-            app = cls(*args_for_app, **kw)
+            app = cls(**kw)
             async with app.run_test(size=(100, 30)) as pilot:
                 await pilot.pause()
-                state = snapshot(app, data_path)
+                state, files = snapshot(app), files_now(data_files)
                 show(state)
+                show_files(data_files)
                 while pending and not restart:
                     step = pending.pop(0)
                     if step == "restart":
@@ -241,14 +285,18 @@ async def run(cls, args_for_app, kw, data_path, steps) -> int:
                         app.query_one(value).focus()
                     elif action == "wait":
                         await asyncio.sleep(float(value))
+                    elif action == "advance" and clock is None:
+                        print(f"  advance needs a clock parameter, and {cls.__name__} has none (wait:SECONDS waits in real time)")
+                        continue
+                    elif action == "advance":
+                        await advance(app, pilot, clock, float(value))
                     else:
-                        print(f"  unknown step {step!r} (use type:, press:, click:, focus:, wait:, restart)")
+                        print(f"  unknown step {step!r} (use type:, press:, click:, focus:, wait:, advance:, restart)")
                         return 2
                     await pilot.pause()
                     if not app.is_running:
                         print("  the app exited")
-                        if data_path is not None:
-                            print(f"  data file: {file_text(data_path)}")
+                        show_files(data_files)
                         if pending and pending[0] == "restart":
                             pending.pop(0)
                             restart = True
@@ -256,53 +304,95 @@ async def run(cls, args_for_app, kw, data_path, steps) -> int:
                             print(f"  steps not run: {pending}")
                             return 0
                         break
-                    new = snapshot(app, data_path)
-                    show_changes(state, new)
-                    state = new
+                    new, new_files = snapshot(app), files_now(data_files)
+                    show_changes(state, new, new_files != files)
+                    show_files(data_files)
+                    state, files = new, new_files
         except Exception:  # noqa: BLE001 - report any crash of the app under test
             print("CRASH:")
             print(crash_text())
-            if data_path is not None:
-                print(f"  data file: {file_text(data_path)}")
+            show_files(data_files)
             return 1
         if not restart:
             return 0
-        print("after restart (same data file):")
+        print("after restart (same files):")
+
+
+def pairs(items: list[str], flag: str, names: list[str]) -> dict[str, str] | None:
+    out = {}
+    for item in items:
+        key, sep, value = item.partition("=")
+        if not sep or key not in names:
+            print(f"{flag} takes NAME=VALUE with NAME one of the App's file parameters: {', '.join(names) or 'none'}")
+            return None
+        out[key] = value
+    return out
 
 
 def main() -> int:
     config = json.loads((Path(__file__).parent / "try_app.json").read_text())
+    params = config.get("params") or []
+    files = [p for p in params if p["role"] in FILE_ROLES]
+    names = [p["name"] for p in files]
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--data", help="contents of the data file to start with")
-    p.add_argument("--data-from", help="copy this file as the data file to start with")
+    p.add_argument("--file", action="append", default=[], metavar="NAME=PATH",
+                   help="start file parameter NAME with a copy of PATH")
+    p.add_argument("--file-text", action="append", default=[], metavar="NAME=TEXT",
+                   help="start file parameter NAME with a file holding TEXT")
+    p.add_argument("--data", help="TEXT for the App's only file parameter (same as --file-text NAME=TEXT)")
+    p.add_argument("--data-from", help="PATH for the App's only file parameter (same as --file NAME=PATH)")
     p.add_argument("--kw", action="append", default=[], help="extra App argument NAME=VALUE (Python literal)")
     p.add_argument("steps", nargs="*")
     a = p.parse_args()
+    texts, copies = pairs(a.file_text, "--file-text", names), pairs(a.file, "--file", names)
+    if texts is None or copies is None:
+        return 2
+    if a.data is not None or a.data_from:
+        if len(files) != 1:
+            print(f"--data/--data-from need exactly one file parameter, and {config['app_class']} has "
+                  f"{len(files)}{': ' + ', '.join(names) if names else ''}. Use --file NAME=PATH or --file-text NAME=TEXT.")
+            return 2
+        if a.data is not None:
+            texts[names[0]] = a.data
+        else:
+            copies[names[0]] = a.data_from
     sys.path.insert(0, ".")
     cls = getattr(importlib.import_module(config["module"]), config["app_class"])
-    data_path = None
-    args_for_app = []
-    if (a.data is not None or a.data_from) and not config.get("data_arg"):
-        print(f"--data/--data-from ignored: {config['app_class']} was set up without a file argument")
-    if config.get("data_arg"):  # a data file the app keeps, or an input file it reads
-        data_path = Path(tempfile.mkdtemp(prefix="try-", dir=".lightness")) / (config.get("data_default") or "data")
-        if a.data is not None:
-            data_path.write_text(a.data)
-        elif a.data_from:
-            shutil.copy(a.data_from, data_path)
-        args_for_app = [str(data_path)]
-    kw = {}
+    tmp = Path(tempfile.mkdtemp(prefix="try-", dir=".lightness"))
+    kw, data_files, said = {}, {}, []
+    for f in files:
+        default = f.get("file") or ("data.json" if f["role"] == "data" else "input.txt")
+        path = tmp / f["name"] / default
+        path.parent.mkdir()
+        if f["name"] in texts:
+            path.write_text(texts[f["name"]])
+        elif f["name"] in copies:
+            shutil.copy(copies[f["name"]], path)
+        elif f["role"] == "input" and Path(default).is_file():
+            shutil.copy(default, path)
+            said.append(f"{f['name']}: a copy of the project's {default}")
+        else:
+            said.append(f"{f['name']}: no file yet")
+        kw[f["name"]] = str(path)
+        if f["role"] == "data":
+            data_files[f["name"]] = path
+    clock = None
+    for c in params:
+        if c["role"] == "clock":
+            clock = kw[c["name"]] = FakeClock()
+            said.append(f"{c['name']}: a fake clock (moves only on advance:SECONDS)")
     for item in a.kw:
         key, _, value = item.partition("=")
         try:
             kw[key] = ast.literal_eval(value)
         except (ValueError, SyntaxError):
             kw[key] = value
+    if said:
+        print("parameters: " + "; ".join(said))
     try:
-        return asyncio.run(run(cls, args_for_app, kw, data_path, a.steps))
+        return asyncio.run(run(cls, kw, data_files, clock, a.steps))
     finally:
-        if data_path is not None:
-            shutil.rmtree(data_path.parent, ignore_errors=True)
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 if __name__ == "__main__":

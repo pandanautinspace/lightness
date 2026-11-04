@@ -13,7 +13,11 @@
   list or table has focus. They do not fire while an `Input` or `TextArea` has focus (those take
   printable keys). Decide which widget has focus when, and set it explicitly.
 - **Missing or broken data files are normal:** start empty, never crash.
-- **Timers and randomness are injected** (a `now` callable, a seed) so tests are deterministic.
+- **Time and randomness come in through `__init__`**: read the time only through the clock
+  parameter (a callable returning seconds), and on each timer tick work out what to show from
+  it; draw random numbers from `random.Random(seed)`. Then the try command's `advance:SECONDS`
+  and tests move time without waiting. Don't wait for long stretches with `set_timer` (it counts
+  real seconds); check the clock on a short `set_interval` instead.
 - **Check the real app with the try command** (below) after each change: run the steps a user
   would, and compare what it prints with the task. Don't test by calling methods on an app that
   was never started, and don't run the app in the foreground: there is no terminal.

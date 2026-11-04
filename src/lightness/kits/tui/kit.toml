@@ -15,24 +15,20 @@ schema = { type = "string", pattern = "^[A-Z][A-Za-z0-9]{0,40}$" }
 help = "a short human title for the app"
 schema = { type = "string", maxLength = 60 }
 
-[names.storage]
-help = "how the app keeps data between runs: json (a JSON file), other (sqlite, plain text, ...), none"
-schema = { enum = ["json", "other", "none"] }
+[names.params]
+help = """the App __init__ parameters, in the contract's order (exact names), each with a role: data (a file the app reads and writes, e.g. its saved records), input (a file the app only reads), clock (a zero-argument callable returning seconds, for anything timed), seed (for randomness), other (any other argument, e.g. a starting value or size). `file` is the default file name for a data or input parameter (the contract's default if it gives one, e.g. notes.json), and "" for the other roles. [] if the app takes no parameters"""
 
-[names.data_arg]
-help = "name of the App __init__ parameter for the data file path (contract's name if given), or \"\" if storage is none"
-schema = { type = "string", pattern = "^([a-z_][a-z0-9_]{0,30})?$" }
-
-[names.data_default]
-help = "default data file name when none is given on the command line (e.g. notes.json), or \"\""
-schema = { type = "string", pattern = "^[A-Za-z0-9_.-]{0,40}$" }
+[names.params.schema]
+type = "array"
+maxItems = 6
+items = { type = "object", properties = { name = { type = "string", pattern = "^[a-z_][a-z0-9_]{0,30}$" }, role = { enum = ["data", "input", "clock", "seed", "other"] }, file = { type = "string", pattern = "^[A-Za-z0-9_.-]{0,40}$" } }, required = ["name", "role", "file"], additionalProperties = false }
 
 [names.empty_value]
-help = "for json storage: the saved value when there is no data yet, as JSON ([] for a list, {} for an object)"
+help = "for a JSON data file: the saved value when there is no data yet ([] for a list, {} for an object)"
 schema = { enum = ["[]", "{}"] }
 
 [names.sample_data]
-help = "for json storage: a small example of the data file's contents in exactly the format the task describes (2-3 records), or \"\" if unknown"
+help = "a small example of the first data or input file's contents, in exactly the format the task describes (2-3 records), or \"\" if there is no such file or the format is unknown"
 schema = { type = "string", maxLength = 1500 }
 
 [[parts]]

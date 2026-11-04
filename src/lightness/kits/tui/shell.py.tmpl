@@ -3,24 +3,14 @@
 Run: python {{module}}.py{{usage_arg}}
 """
 
-# [json]
-import json
-# [/json]
-import sys
-# [path]
-from pathlib import Path
-# [/path]
+{{imports}}
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import Footer, Header, Static
 
-# [path]
-DEFAULT_DATA = "{{data_default}}"
-# [/path]
+{{defaults}}
 # [json]
-
-
 def load_data(path: Path):
     """The saved data, or the empty value when the file is missing or unreadable."""
     try:
@@ -34,9 +24,9 @@ def save_data(path: Path, data) -> None:
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(data, indent=2))
     tmp.replace(path)
-
-
 # [/json]
+
+
 class {{app_class}}(App):
     """State lives in plain Python data on the app; widgets only display it.
     After every change: update the data, save it, then call refresh_view()."""
@@ -51,15 +41,9 @@ class {{app_class}}(App):
         Binding("ctrl+q", "quit", "Quit"),
     ]
 
-    def __init__(self{{init_params}}) -> None:
+    def __init__({{init_params}}) -> None:
         super().__init__()
-        # [path]
-        self.{{data_arg}} = Path({{data_arg}})
-        # [/path]
-        # [json]
-        self.data = load_data(self.{{data_arg}})
-        # [/json]
-
+{{init_body}}
     def compose(self) -> ComposeResult:
         """Create every widget here. Fill in their content in refresh_view()."""
         yield Header()
@@ -72,17 +56,16 @@ class {{app_class}}(App):
     def refresh_view(self) -> None:
         """Make the widgets show the current state. Safe to call any time after mount."""
         self.query_one("#main", Static).update("")
-
     # [json]
-    def save(self) -> None:
-        save_data(self.{{data_arg}}, self.data)
 
+    def save(self) -> None:
+        save_data(self.{{data_param}}, self.data)
     # [/json]
 
 
 def main(argv: list[str] | None = None) -> None:
     args = sys.argv[1:] if argv is None else argv
-    {{main_body}}
+{{main_body}}
 
 
 if __name__ == "__main__":

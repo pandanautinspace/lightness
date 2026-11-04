@@ -5,12 +5,14 @@ of tests and contract scenarios.
 """
 
 import os
+import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 from lightness.bench import sandbox
+from lightness.kits import default_file, file_params
 from lightness.verify.chain import BIN
 from lightness.verify.compress import traceback_summary
 
@@ -21,10 +23,10 @@ mod = importlib.import_module({module!r})
 cls = getattr(mod, {app_class!r}, None)
 if cls is None:
     print("SMOKE: {module}.py has no class {app_class}"); sys.exit(3)
-path = {path!r}
+kwargs = {kwargs!r}
 
 async def main():
-    app = cls(path) if path else cls()
+    app = cls(**kwargs)
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause()
 
@@ -54,31 +56,45 @@ def _python(code: str, ws: Path, run_dir: Path | None, timeout: int) -> subproce
 
 
 def tui(ws: Path, names: dict, run_dir: Path | None = None, timeout: int = 30) -> list[SmokeResult]:
-    """Start the app headless with no data file, and with the sample data if there is one."""
+    """Start the app headless with no data files, and with the sample contents in its first file.
+
+    Every file parameter gets a path of its own in a temp dir. Data files start missing; an input
+    file is a copy of the project's file of that name when there is one."""
     module, app_class = names["module"], names["app_class"]
     if not (ws / f"{module}.py").exists():
         return []
-    cases: list[tuple[str, str | None, str | None]] = []
-    has_path = bool(names.get("data_arg"))
+    files = file_params(names)
     base = Path(tempfile.mkdtemp(dir=(run_dir / "tmp") if run_dir else None, prefix="smoke-"))
-    name = names.get("data_default") or "data.json"
-    cases.append(("starting with no data file", str(base / "missing" / name) if has_path else None, None))
+
+    def paths(case: str) -> dict[str, str]:
+        (base / case).mkdir()
+        out = {}
+        for p in files:
+            out[p["name"]] = str(base / case / default_file(p))
+            if p["role"] == "input" and (ws / default_file(p)).is_file():
+                shutil.copy(ws / default_file(p), out[p["name"]])
+        return out
+
+    data = [p for p in files if p["role"] == "data"]
+    cases: list[tuple[str, dict, str | None]] = [
+        ("starting with no data file" if data else "starting", paths("fresh"), None)]
     sample = (names.get("sample_data") or "").strip()
-    if has_path and sample:
-        cases.append(("starting with an existing data file", str(base / name), sample))
-    (base / "missing").mkdir(parents=True, exist_ok=True)
+    if files and sample:
+        first = files[0]
+        label = "an existing data file" if first["role"] == "data" else "an input file"
+        cases.append((f"starting with {label} ({first['name']})", paths("sample"), sample))
     results = []
-    for case, path, content in cases:
-        if content is not None and path is not None:
-            Path(path).write_text(content)
-        proc = _python(TUI_SNIPPET.format(module=module, app_class=app_class, path=path), ws, run_dir, timeout)
+    for case, kwargs, content in cases:
+        if content is not None:
+            Path(kwargs[files[0]["name"]]).write_text(content)
+        proc = _python(TUI_SNIPPET.format(module=module, app_class=app_class, kwargs=kwargs), ws, run_dir, timeout)
         out = proc.stdout + proc.stderr
         if proc.returncode == 0 and "SMOKE-OK" in proc.stdout:
             results.append(SmokeResult(True, case))
         else:
             detail = out.strip().splitlines()[-1] if "SMOKE:" in out else traceback_summary(out, ws)
             if content:
-                detail += f"\n(data file contents: {content[:300]})"
+                detail += f"\n(file contents: {content[:300]})"
             results.append(SmokeResult(False, case, detail))
     return results
 

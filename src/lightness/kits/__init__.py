@@ -87,26 +87,73 @@ def _blocks(text: str, keep: set[str]) -> str:
     return "".join(out)
 
 
+FILE_ROLES = ("data", "input")
+
+
+def file_params(names: dict) -> list[dict]:
+    """The App's file parameters (data and input), in order."""
+    return [p for p in names.get("params") or [] if p["role"] in FILE_ROLES]
+
+
+def default_file(param: dict) -> str:
+    return param.get("file") or ("data.json" if param["role"] == "data" else "input.txt")
+
+
+def _tui_values(values: dict) -> set[str]:
+    """Fill the TUI shell's generated names from the params list; returns the blocks to keep."""
+    params = values.get("params") or []
+    seen = [p["name"] for p in params]
+    if len(set(seen)) != len(seen) or "self" in seen:
+        raise ValueError(f"bad parameter names: {seen}")
+    files = file_params(values)
+    store = next((p for p in params if p["role"] == "data" and default_file(p).endswith(".json")), None)
+    imports = {"import sys"} | ({"import json"} if store else set())
+    imports |= {"import time"} if any(p["role"] == "clock" for p in params) else set()
+    imports |= {"import random"} if any(p["role"] == "seed" for p in params) else set()
+    values["imports"] = "\n".join(sorted(imports) + (["from pathlib import Path"] if files else []))
+    const = {p["name"]: f"DEFAULT_{p['name'].upper()}" for p in files}
+    values["defaults"] = "".join(f'{const[p["name"]]} = "{default_file(p)}"\n' for p in files) + ("\n\n" if files else "")
+    from textual.app import App
+
+    attr = {p["name"]: p["name"] + "_arg" if hasattr(App, p["name"]) else p["name"] for p in params}
+    sig, body = [], []
+    for p in params:
+        n = p["name"]
+        if p["role"] in FILE_ROLES:
+            sig.append(f"{n}: str = {const[n]}")
+            body.append(f"self.{attr[n]} = Path({n})" + ("  # read only" if p["role"] == "input" else ""))
+        elif p["role"] == "clock":
+            sig.append(f"{n}=time.monotonic")
+            body.append(f"self.{attr[n]} = {n}  # read the time only through this: tests pass a fake clock")
+        elif p["role"] == "seed":
+            sig.append(f"{n}: int | None = None")
+            body.append(f"self.rng = random.Random({n})  # all randomness comes from here")
+        else:
+            sig.append(f"{n}=None")
+            body.append(f"self.{attr[n]} = {n}" + ("  # App already has .{n}" if attr[n] != n else ""))
+        if p is store:
+            body.append(f"self.data = load_data(self.{attr[n]})")
+    sig.insert(0, "self")
+    values["init_params"] = ", ".join(sig)
+    if len(values["init_params"]) > 70:
+        values["init_params"] = "".join(f"\n        {x}," for x in sig) + "\n    "
+    values["init_body"] = "".join(f"        {line}\n" for line in body)
+    values["usage_arg"] = "".join(f" [{p['name'].upper()}]" for p in files)
+    cls = values["app_class"]
+    values["main_body"] = (f"    paths = dict(zip({[p['name'] for p in files]!r}, args))\n    {cls}(**paths).run()"
+                           if files else f"    {cls}().run()")
+    values["data_param"] = attr[store["name"]] if store else ""
+    return {"json"} if store else set()
+
+
 def render_shell(kit: Kit, names: dict) -> str:
     """The shell program for these names. Raises ValueError if the result doesn't parse."""
     values = dict(names)
-    keep = set()
-    if kit.category == "tui":
-        storage = values.get("storage", "none")
-        if storage != "none" and values.get("data_arg"):
-            keep.add("path")
-            if storage == "json":
-                keep.add("json")
-        else:
-            values["data_arg"] = ""
-        arg = values["data_arg"]
-        values["init_params"] = f", {arg}: str = DEFAULT_DATA" if arg else ""
-        values["usage_arg"] = " [DATA_PATH]" if arg else ""
-        values["main_body"] = (f"{values['app_class']}(args[0] if args else DEFAULT_DATA).run()" if arg
-                               else f"{values['app_class']}().run()")
+    keep = _tui_values(values) if kit.category == "tui" else set()
     text = _blocks((kit.dir / "shell.py.tmpl").read_text(), keep)
     for key, value in values.items():
         text = text.replace("{{" + key + "}}", str(value))
+    text = re.sub(r"\n{4,}", "\n\n\n", text)  # blocks and empty names leave extra blank lines
     left = re.findall(r"\{\{\w+\}\}", text)
     if left:
         raise ValueError(f"unfilled names in shell: {sorted(set(left))}")
@@ -121,9 +168,25 @@ def shell_path(kit: Kit, names: dict) -> str:
     return f"{names['module']}.py"
 
 
+def describe_params(names: dict) -> str:
+    """How the try command starts each App parameter, for the try notes."""
+    said = []
+    for p in names.get("params") or []:
+        if p["role"] == "data":
+            said.append(f"`{p['name']}` (data file: starts with no file)")
+        elif p["role"] == "input":
+            said.append(f"`{p['name']}` (input file: starts as a copy of the project's {default_file(p)} "
+                        f"if there is one)")
+        elif p["role"] == "clock":
+            said.append(f"`{p['name']}` (a fake clock: time moves only on advance:SECONDS)")
+    return ("Parameters it passes: " + ", ".join(said) + ".") if said else "The app takes no file or clock parameters."
+
+
 def trying(kit: Kit, names: dict) -> str:
     path = kit.dir / "try.md"
-    return path.read_text().replace("{module}", names["module"]) + "\n\n" if kit.try_tool and path.exists() else ""
+    if not (kit.try_tool and path.exists()):
+        return ""
+    return path.read_text().replace("{module}", names["module"]).replace("{params}", describe_params(names)) + "\n\n"
 
 
 def context(kit: Kit, names: dict, parts_dir: str, chosen: list[str]) -> str:

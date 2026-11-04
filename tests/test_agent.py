@@ -166,8 +166,9 @@ class KitClient(FakeClient):
         return Reply(text="", parsed=self.answers[purpose])
 
 
-NOTES = {"module": "notes", "app_class": "NotesApp", "title": "Notes", "storage": "json", "data_arg": "data_path",
-         "data_default": "notes.json", "empty_value": "[]", "sample_data": '[{"text": "a"}]'}
+NOTES = {"module": "notes", "app_class": "NotesApp", "title": "Notes",
+         "params": [{"name": "data_path", "role": "data", "file": "notes.json"}],
+         "empty_value": "[]", "sample_data": '[{"text": "a"}]'}
 
 
 def test_kit_writes_shell_and_reports_start_changes(ws):
@@ -221,6 +222,27 @@ def test_kit_lets_a_working_app_submit(ws):
     client = KitClient([SUBMIT], NOTES)
     res = TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit()], step_limit=3).run("notes app")
     assert res.submitted and res.steps == 1
+
+
+def test_smoke_passes_every_file_parameter(ws):
+    from lightness.kits import smoke
+
+    sandbox.sandbox_env(ws.parent)  # makes the run dir's tmp/
+    (ws / "places.csv").write_text("ams\n")
+    (ws / "both.py").write_text(
+        "from pathlib import Path\nfrom textual.app import App\n\n\nclass Both(App):\n"
+        "    def __init__(self, places_path, saved_path):\n        super().__init__()\n"
+        "        assert Path(places_path).read_text() == 'ams\\n'\n"
+        "        assert not Path(saved_path).exists() or Path(saved_path).read_text() == '[1]'\n")
+    names = {"module": "both", "app_class": "Both", "sample_data": "",
+             "params": [{"name": "places_path", "role": "input", "file": "places.csv"},
+                        {"name": "saved_path", "role": "data", "file": "saved.json"}]}
+    results = smoke.tui(ws, names, ws.parent)
+    assert [(r.ok, r.case) for r in results] == [(True, "starting with no data file")]
+    names = {**names, "params": names["params"][::-1], "sample_data": "[1]"}  # data first: gets the sample
+    results = smoke.tui(ws, names, ws.parent)
+    assert [r.case for r in results if r.ok] == ["starting with no data file",
+                                                 "starting with an existing data file (saved_path)"]
 
 
 def test_kit_skips_existing_code(ws):

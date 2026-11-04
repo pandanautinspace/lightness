@@ -282,7 +282,9 @@ def main() -> int:
     cls = getattr(importlib.import_module(config["module"]), config["app_class"])
     data_path = None
     args_for_app = []
-    if config.get("storage", "none") != "none" and config.get("data_arg"):
+    if (a.data is not None or a.data_from) and not config.get("data_arg"):
+        print(f"--data/--data-from ignored: {config['app_class']} was set up without a file argument")
+    if config.get("data_arg"):  # a data file the app keeps, or an input file it reads
         data_path = Path(tempfile.mkdtemp(prefix="try-", dir=".lightness")) / (config.get("data_default") or "data")
         if a.data is not None:
             data_path.write_text(a.data)

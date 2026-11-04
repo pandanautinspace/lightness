@@ -427,3 +427,17 @@ def test_try_app_documented_input_replace_works(tmp_path):
     out = try_app(tmp_path, {"module": "conv", "app_class": "ConverterApp", "storage": "none"},
                   "type:12", "focus:#amount", "press:end,ctrl+u", "type:3")
     assert "after type:3:\n  #amount input: '3'" in out
+
+
+def test_try_app_passes_an_input_file_even_without_storage(tmp_path):
+    (tmp_path / "viewer.py").write_text(
+        "from pathlib import Path\nfrom textual.app import App\nfrom textual.widgets import Static\n\n\n"
+        "class V(App):\n    def __init__(self, json_path=None):\n        super().__init__()\n"
+        "        self.text = Path(json_path).read_text() if json_path else '(no file)'\n\n"
+        "    def compose(self):\n        yield Static(self.text, id='body')\n")
+    (tmp_path / "in.json").write_text('{"a": 1}')
+    names = {"module": "viewer", "app_class": "V", "storage": "none", "data_arg": "json_path"}
+    out = try_app(tmp_path, names, "--data-from", "in.json")
+    assert "#body: '{\"a\": 1}'" in out
+    out = try_app(tmp_path, {**names, "data_arg": ""}, "--data", "x")
+    assert "--data/--data-from ignored" in out

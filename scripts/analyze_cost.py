@@ -73,6 +73,8 @@ def regressions_caught(steps: list[dict]) -> int:
 
 
 def run_stats(d: Path) -> dict | None:
+    # empty-reply tries per step: 3 for runs started before 2026-11-04 16:58, 5 after
+    tries = 5 if (d / "calls.jsonl").exists() and json.loads((d / "calls.jsonl").read_text().splitlines()[0])["ts"] > 1793824700 else 3
     if not (d / "messages.json").exists():
         return None
     msgs = json.loads((d / "messages.json").read_text())
@@ -81,11 +83,11 @@ def run_stats(d: Path) -> dict | None:
     for c in calls:
         if c.get("purpose") != "agent" or not c.get("ok"):
             continue
-        # An empty reply is asked again (up to 3 times in a step); only the 3rd of a streak is kept in
-        # the transcript, so drop the others to keep calls and transcript steps paired.
+        # An empty reply is asked again (up to TRIES times in a step); only the last of a streak is kept
+        # in the transcript, so drop the others to keep calls and transcript steps paired.
         if c.get("finish_reason") == "content_filter" or not c.get("completion_tokens"):
             streak += 1
-            if streak % 3:
+            if streak % tries:
                 continue
         else:
             streak = 0

@@ -295,12 +295,12 @@ class TranscriptAgent:
             for m in self.middleware:
                 m.before_call(ctx)
             try:
-                for _ in range(3):  # an empty reply (e.g. finish_reason content_filter) is asked again
+                for _ in range(5):  # an empty reply (e.g. a proxy's moderation block) is asked again
                     reply = self.client.chat(ctx.messages, purpose="agent", thinking=True, max_tokens=16384,
                                              tools=[BASH_TOOL])
                     if reply.tool_calls or reply.text.strip():
                         break
-                    ctx.log("empty_reply", finish=reply.finish_reason)
+                    ctx.log("empty_reply", finish=reply.finish_reason, refusal=reply.refusal[:120])
             except ContextOverflow:
                 return self._end(ctx, "ContextOverflow", False)
             ctx.last_prompt_tokens = reply.usage.get("prompt_tokens") or 0

@@ -58,6 +58,7 @@ class Reply:
     latency: float = 0.0
     finish_reason: str = ""
     tool_calls: list[dict] = field(default_factory=list)  # OpenAI format, as returned
+    refusal: str = ""  # a proxy's moderation message (Parley: finish_reason content_filter)
 
 
 Thinking = bool | int  # False = off, True = on (server cap), int = on with this token budget
@@ -149,6 +150,7 @@ class Client:
             latency=latency,
             finish_reason=choice.get("finish_reason", ""),
             tool_calls=msg.get("tool_calls") or [],
+            refusal=msg.get("refusal") or "",
         )
         self._log(purpose, reply, latency, ok=True, thinking=thinking)
         return reply
@@ -219,6 +221,8 @@ class Client:
                 "reasoning_chars": len(reply.reasoning),
                 "finish_reason": reply.finish_reason,
             }
+            if reply.refusal:
+                row["refusal"] = reply.refusal[:300]
         if error:
             row["error"] = error[:500]
         self.log_path.parent.mkdir(parents=True, exist_ok=True)

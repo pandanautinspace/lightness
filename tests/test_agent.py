@@ -203,6 +203,26 @@ def test_kit_smoke_catches_crash_on_existing_data(ws):
     assert "no data file" not in out
 
 
+def test_kit_refuses_to_submit_an_app_that_crashes_on_start(ws):
+    break_mount = "sed -i '' 's/        self.refresh_view()/        self.refresh_view()\\n        1 \\/ 0/' notes.py"
+    fix_mount = "sed -i '' '/1 \\/ 0/d' notes.py"
+    run_dir = ws.parent
+    env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
+    client = KitClient([break_mount, SUBMIT, fix_mount, SUBMIT, "echo never"], NOTES)
+    res = TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit()], step_limit=10).run("notes app")
+    assert res.submitted and res.steps == 4
+    refused = [m["content"] for m in client.seen[-1] if m["role"] == "tool"][1]
+    assert refused.startswith("Not submitted: the app crashes on start.") and "ZeroDivisionError" in refused
+
+
+def test_kit_lets_a_working_app_submit(ws):
+    run_dir = ws.parent
+    env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
+    client = KitClient([SUBMIT], NOTES)
+    res = TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit()], step_limit=3).run("notes app")
+    assert res.submitted and res.steps == 1
+
+
 def test_kit_skips_existing_code(ws):
     (ws / "app.py").write_text("print(1)\n")
     client = KitClient(["true"], NOTES)

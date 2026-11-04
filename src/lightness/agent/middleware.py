@@ -274,3 +274,17 @@ class Kit(Middleware):
         if text == previous or (previous is None and all(r.ok for r in results)):
             return None  # only report changes (and never an initial "fine")
         return shorten_paths("[automatic start check] " + text, ctx.ws, ctx.run_dir)
+
+    def on_submit(self, ctx: Ctx) -> str | None:
+        """Refuse to submit an app that crashes on start (no limit: the step and wall limits apply)."""
+        from lightness.kits import smoke
+
+        if "kit" not in ctx.data or ctx.data["kit"][0].category != "tui":
+            return None
+        names = ctx.data["kit"][1]
+        bad = [r for r in smoke.tui(ctx.ws, names, ctx.run_dir) if not r.ok]
+        if not bad:
+            return None
+        ctx.log("smoke.submit_refused")
+        return shorten_paths("Not submitted: the app crashes on start.\n" + smoke.summarize(bad, f"{names['module']}.py"),
+                             ctx.ws, ctx.run_dir)

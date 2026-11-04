@@ -189,13 +189,24 @@ def trying(kit: Kit, names: dict) -> str:
     return path.read_text().replace("{module}", names["module"]).replace("{params}", describe_params(names)) + "\n\n"
 
 
-def context(kit: Kit, names: dict, parts_dir: str, chosen: list[str]) -> str:
+TEST_ARMS = ("none", "first", "after")
+
+
+def notes(kit: Kit, tests: str = "none") -> str:
+    """The design notes, with the testing bullet for this testing arm."""
+    return kit.notes.replace("{testing}", kit.meta.get("testing", {}).get(tests, ""))
+
+
+def part_text(part: Part) -> str:
+    return f"\n### Part `{part.name}`\n```python\n{part.path.read_text()}```\n"
+
+
+def context(kit: Kit, names: dict, parts_dir: str, chosen: list[str], tests: str = "none") -> str:
     """Text for the task message: what was created, the design notes, the cheat sheet and the parts."""
     index = "\n".join(f"- `{p.name}`: {p.when}" for p in kit.parts)
-    inline = "".join(f"\n### Part `{p.name}`\n```python\n{p.path.read_text()}```\n"
-                     for p in kit.parts if p.name in chosen)
+    inline = "".join(part_text(p) for p in kit.parts if p.name in chosen)
     return (f"## Starting point\n\nI created `{shell_path(kit, names)}`, a minimal {kit.category} app that already "
             f"runs. Build the task on it: keep its structure, replace the placeholder content.\n\n"
-            f"{kit.notes}\n\n{trying(kit, names)}{kit.cheatsheet}\n\n"
+            f"{notes(kit, tests)}\n\n{trying(kit, names)}{kit.cheatsheet}\n\n"
             f"## Parts\n\nSmall, working examples of common patterns, in `{parts_dir}`. Read one with "
             f"`cat {parts_dir}/<name>.py` when you need it; copy what fits.\n\n{index}\n{inline}")

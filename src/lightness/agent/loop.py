@@ -264,7 +264,7 @@ def text_tool_call(text: str) -> str | None:
 
 class TranscriptAgent:
     def __init__(self, client: Client, ws: Path, run_dir: Path, env: dict[str, str], *,
-                 middleware: list[Middleware] = (), step_limit: int = 100, wall_limit: float = 1800,
+                 middleware: list[Middleware] = (), step_limit: int = 150, wall_limit: float = 1800,
                  guard_commands: bool = False):
         self.client, self.ws, self.run_dir, self.env = client, ws, run_dir, env
         self.runner = run_command_guarded if guard_commands else run_command

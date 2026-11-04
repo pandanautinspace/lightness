@@ -263,3 +263,32 @@ def test_text_tool_call_recovery():
     assert text_tool_call("Plan: first ```bash\nls\n``` then ```bash\npwd\n```") is None  # two: unclear
     assert text_tool_call('{"state": {"a": 1}}') is None
     assert text_tool_call("No command here.") is None
+
+
+@pytest.mark.parametrize("tests", ["none", "first", "after"])
+def test_kit_testing_arms(ws, tests):
+    run_dir = ws.parent
+    env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
+    client = KitClient([SUBMIT, SUBMIT, "echo never"], NOTES)
+    res = TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit(tests)], step_limit=5).run("notes app")
+    first_user = client.seen[0][1]["content"]
+    assert "{testing}" not in first_user
+    assert ("Before writing the app, write tests" in first_user) == (tests == "first")
+    assert ("Write test files only if the task asks" in first_user) == (tests != "first")
+    assert ("### Part `headless_test`" in first_user) == (tests == "first")
+    if tests == "after":  # the first submit asks for tests and shows the guide; the second goes through
+        assert res.submitted and res.steps == 2
+        reply = tool_outputs(client)[0]
+        assert reply.startswith(mw.TESTS_AFTER) and "### Part `headless_test`" in reply
+    else:
+        assert res.submitted and res.steps == 1
+
+
+def test_bench_labels_the_testing_arm():
+    from lightness.bench.agents import MiddlewareAgent
+
+    assert MiddlewareAgent("haiku", ["env", "guard", "kit"], tests="after").name == "mw-env.guard.kit-tests.after"
+    assert MiddlewareAgent("haiku", ["env"]).name == "mw-env"
+    assert MiddlewareAgent("haiku", ["kit"]).step_limit == 150
+    with pytest.raises(ValueError):
+        MiddlewareAgent("haiku", ["env"], tests="first")

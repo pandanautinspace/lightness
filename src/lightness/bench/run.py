@@ -35,7 +35,7 @@ from lightness.bench.tasks import REPO_ROOT, Task, all_task_ids, load_task
 app = typer.Typer(add_completion=False)
 
 
-def make_agent(name: str, model: str | None):
+def make_agent(name: str, model: str | None, tests: str = "none"):
     if name == "oracle":
         return OracleAgent()
     if name == "null":
@@ -54,10 +54,15 @@ def make_agent(name: str, model: str | None):
     if name == "mw" or name.startswith("mw:"):
         features = [f for f in name.partition(":")[2].split(",") if f]
         try:
-            return MiddlewareAgent(model, features)
+            return MiddlewareAgent(model, features, tests=tests)
         except ValueError as e:
             raise typer.BadParameter(str(e)) from None
     raise typer.BadParameter(f"unknown agent {name}")
+
+
+def _check_tests(name: str, tests: str) -> None:
+    if tests != "none" and not name.startswith("mw"):
+        raise typer.BadParameter("--tests applies to mw agents with the kit")
 
 
 TEST_TIMEOUT = 20  # seconds per hidden test; a test that hangs fails alone
@@ -130,10 +135,12 @@ def main(
     suite: str = typer.Option("tasks", help="task folder under bench/: tasks (main benchmark), kit-tui, ..."),
     runs: int = typer.Option(1, help="runs per task"),
     jobs: int = typer.Option(1, help="runs at once (keep 1 for a local server: it serves one request at a time)"),
+    tests: str = typer.Option("none", help="kit testing arm: none | first | after (see docs/kits.md)"),
     out: Path = typer.Option(REPO_ROOT / "runs"),
 ):
     task_ids = all_task_ids(suite) if tasks == "all" else tasks.split(",")
-    agent_obj = make_agent(agent, model)
+    _check_tests(agent, tests)
+    agent_obj = make_agent(agent, model, tests)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     prefix = "" if suite == "tasks" else f"{suite}-"
     batch_dir = out / f"{prefix}{stamp}-{agent_obj.name}-{model or 'none'}-{os.getpid()}"
@@ -156,7 +163,7 @@ def main(
         t0 = time.time()
         res = agent_obj.run(task, ws, run_dir)
         v = verify(task, ws, run_dir)
-        row = {"task": tid, "run": i, "agent": agent, "model": model, **asdict(res), **v,
+        row = {"task": tid, "run": i, "agent": agent, "model": model, "tests": tests, **asdict(res), **v,
                "total_sec": round(time.time() - t0, 1)}
         mark = "PASS" if v["pass"] else "fail"
         asked = len(res.extra.get("questions", []))

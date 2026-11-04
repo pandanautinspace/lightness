@@ -3,6 +3,12 @@
 # Parts always shown in full (not only in the index).
 always = []
 
+# The notes' testing bullet, per testing arm (bench --tests). "after" also asks for tests on the first submit.
+[testing]
+none = "Check the real app with the try command after each change. Write test files only if the task asks (then follow the headless_test part)."
+first = "Before writing the app, write tests from the task's contract (follow the headless_test part). Then build the app until they pass. Use the try command to see what the app does."
+after = "Check the real app with the try command after each change. Write test files only if the task asks (then follow the headless_test part)."
+
 [names.module]
 help = "file name of the app module without .py (e.g. the contract's `notes.py` → notes)"
 schema = { type = "string", pattern = "^[a-z_][a-z0-9_]{0,40}$" }

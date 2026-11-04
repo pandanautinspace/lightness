@@ -1,7 +1,7 @@
 ## Trying the app
 
-To see what the app does, run it with the harness's try command. Don't write test files or
-debug scripts for this:
+To see what the app does, run it with the harness's try command. Don't write debug scripts
+for this:
 
     python .lightness/kit/try_app.py [--file-text NAME=TEXT] [--file NAME=PATH] STEP ...
 

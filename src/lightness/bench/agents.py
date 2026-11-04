@@ -196,12 +196,14 @@ class MiddlewareAgent:
 
     FEATURES = ("env", "workshop", "kit", "checks", "gate", "repeat", "compact", "guard")  # guard: command runner
 
-    def __init__(self, model_name: str, features: list[str], step_limit: int = 100):
+    def __init__(self, model_name: str, features: list[str], step_limit: int = 150, tests: str = "none"):
         unknown = set(features) - set(self.FEATURES)
         if unknown:
             raise ValueError(f"unknown middleware {sorted(unknown)}; choose from {self.FEATURES}")
-        self.model_name, self.features, self.step_limit = model_name, features, step_limit
-        self.name = "mw" + ("-" + ".".join(features) if features else "")
+        if tests != "none" and "kit" not in features:
+            raise ValueError("--tests needs the kit middleware")
+        self.model_name, self.features, self.step_limit, self.tests = model_name, features, step_limit, tests
+        self.name = "mw" + ("-" + ".".join(features) if features else "") + ("-tests." + tests if "kit" in features else "")
 
     def run(self, task: Task, ws: Path, log_dir: Path) -> AgentResult:
         import json
@@ -212,7 +214,7 @@ class MiddlewareAgent:
         calls = log_dir / "calls.jsonl"
         client = Client.from_registry(self.model_name, log_path=calls)
         user = SimulatedUser(client, task.intent)
-        build = {"env": mw.EnvNotes, "workshop": lambda: mw.Workshop(user), "kit": mw.Kit, "checks": mw.Checks, "gate": mw.SubmitGate,
+        build = {"env": mw.EnvNotes, "workshop": lambda: mw.Workshop(user), "kit": lambda: mw.Kit(self.tests), "checks": mw.Checks, "gate": mw.SubmitGate,
                  "repeat": mw.RepeatGuard, "compact": mw.Compaction}
         middleware = [build[f]() for f in self.FEATURES if f in self.features and f in build]  # fixed order
         env = os.environ | bench_env() | sandbox.sandbox_env(log_dir) | {

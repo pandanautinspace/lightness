@@ -197,12 +197,25 @@ KIT_CLASSIFY = {
 }
 
 
+TESTS_AFTER = ("Not submitted yet. Before submitting: write tests for the task's contract (guide below), run them, "
+               "fix what fails, then submit.")
+
+
 class Kit(Middleware):
     """Start new apps from the kit for their type: the harness writes a working shell, shows the
     design notes, a cheat sheet and the parts index, and checks the app still starts after each
     change. Repo changes and apps no kit fits get nothing."""
 
     name = "kit"
+
+    def __init__(self, tests: str = "none"):
+        """tests: the testing arm. none: try the app, tests only if the task asks; first: write tests
+        from the contract before the app; after: on the first submit, ask for tests before submitting."""
+        from lightness.kits import TEST_ARMS
+
+        if tests not in TEST_ARMS:
+            raise ValueError(f"tests must be one of {TEST_ARMS}")
+        self.tests = tests
 
     def start(self, ctx: Ctx) -> str | None:
         from lightness import kits
@@ -242,7 +255,8 @@ class Kit(Middleware):
                 purpose="kit.parts").parsed["parts"]
         except DecisionError:
             chosen = []
-        chosen = list(dict.fromkeys(kit.meta.get("always", []) + chosen))
+        always = kit.meta.get("always", []) + (["headless_test"] if self.tests == "first" else [])
+        chosen = list(dict.fromkeys(always + chosen))
         (ctx.ws / kits.shell_path(kit, names)).write_text(shell)
         parts_dir = ctx.ws / ".lightness" / "kit" / "parts"
         parts_dir.mkdir(parents=True, exist_ok=True)
@@ -252,8 +266,8 @@ class Kit(Middleware):
             (parts_dir.parent / kit.try_tool.name).write_text(kit.try_tool.read_text())
             (parts_dir.parent / kit.try_tool.with_suffix(".json").name).write_text(json.dumps(names))
         ctx.data["kit"] = (kit, names)
-        ctx.log("kit", kind=kind, names=names, parts=chosen)
-        return kits.context(kit, names, ".lightness/kit/parts", chosen)
+        ctx.log("kit", kind=kind, names=names, parts=chosen, tests=self.tests)
+        return kits.context(kit, names, ".lightness/kit/parts", chosen, self.tests)
 
     def after_command(self, ctx: Ctx, command: str, output: dict) -> str | None:
         from lightness.kits import smoke
@@ -284,8 +298,15 @@ class Kit(Middleware):
             return None
         names = ctx.data["kit"][1]
         bad = [r for r in smoke.tui(ctx.ws, names, ctx.run_dir) if not r.ok]
-        if not bad:
-            return None
-        ctx.log("smoke.submit_refused")
-        return shorten_paths("Not submitted: the app crashes on start.\n" + smoke.summarize(bad, f"{names['module']}.py"),
-                             ctx.ws, ctx.run_dir)
+        if bad:
+            ctx.log("smoke.submit_refused")
+            return shorten_paths("Not submitted: the app crashes on start.\n"
+                                 + smoke.summarize(bad, f"{names['module']}.py"), ctx.ws, ctx.run_dir)
+        if self.tests == "after" and not ctx.data.get("kit.tests_asked"):
+            from lightness.kits import part_text
+
+            ctx.data["kit.tests_asked"] = True
+            ctx.log("kit.tests_asked")
+            guide = next(p for p in ctx.data["kit"][0].parts if p.name == "headless_test")
+            return (TESTS_AFTER + "\n" + part_text(guide))
+        return None

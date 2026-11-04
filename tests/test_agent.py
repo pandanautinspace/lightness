@@ -63,7 +63,17 @@ def test_missing_tool_call_gets_format_error(ws):
     a, client = agent(ws, [], step_limit=2)
     res = a.run("x")
     assert not res.submitted and res.status == "LimitsExceeded"
-    assert "no bash tool call" in client.seen[-1][-1]["content"]
+    message = client.seen[-1][-1]["content"]
+    assert "no bash tool call" in message and SUBMIT not in message and '{"command": "ls"}' in message
+
+
+def test_format_error_shows_the_try_command_when_the_kit_gave_one(ws):
+    from lightness.agent.loop import format_error
+
+    (ws / ".lightness" / "kit").mkdir(parents=True)
+    (ws / ".lightness" / "kit" / "try_app.py").write_text("")
+    message = format_error(ws)
+    assert '{"command": "python .lightness/kit/try_app.py"}' in message and SUBMIT not in message
 
 
 def test_checks_report_static_problem_without_rewriting(ws):

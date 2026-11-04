@@ -96,8 +96,15 @@ nl -ba filename.py | sed -n '10,20p'
 FORMAT_ERROR = """Tool call error: your response had no bash tool call.
 
 Every response needs to use the 'bash' tool at least once to execute commands.
-Call the bash tool with your command as the argument: {"command": "your_command_here"}
-If you want to end the task, issue the command `""" + SUBMIT + "` without any other command."
+Call the bash tool with your command as the argument, for example: {example}"""
+TRY_COMMAND = "python .lightness/kit/try_app.py"
+
+
+def format_error(ws: Path) -> str:
+    """The reply to a response without a tool call. Its example is a useful next step, not a way out."""
+    command = TRY_COMMAND if (ws / ".lightness" / "kit" / "try_app.py").exists() else "ls"
+    return FORMAT_ERROR.format(example=json.dumps({"command": command}))
+
 
 BASH_TOOL = {
     "type": "function",
@@ -305,7 +312,7 @@ class TranscriptAgent:
             ctx.messages.append(self._assistant(reply))
             calls = [c for c in reply.tool_calls if c.get("function", {}).get("name") == "bash"]
             if not calls:
-                ctx.messages.append({"role": "user", "content": FORMAT_ERROR})
+                ctx.messages.append({"role": "user", "content": format_error(ctx.ws)})
                 ctx.log("format_error", finish=reply.finish_reason)
                 continue
             for call in calls:

@@ -25,10 +25,12 @@ mode = "strict"
 caps = { json_schema = true, thinking_toggle = true, thinking_budget_field = "thinking_budget_tokens" }
 
 # Hosted models (MIT Parley). The key comes from $OPENAI_API_KEY or the git-ignored .env.parley.
+# timeout: seconds per request (local models keep the client default, 900 s).
 # The proxy ignores reasoning_effort; GPT-5 models always reason and don't return the reasoning.
 
 [nano]
 base_url = "https://parley.api.mit.edu/v1"
+timeout = 60  # a stalled request is retried after a minute (provider retries)
 model = "gpt-5-nano"
 api_key_env = "OPENAI_API_KEY"
 env_file = ".env.parley"
@@ -38,6 +40,7 @@ caps = { json_schema = true, thinking_toggle = false, thinking_budget_field = ""
 
 [maverick]
 base_url = "https://parley.api.mit.edu/v1"
+timeout = 60  # a stalled request is retried after a minute (provider retries)
 model = "llama-4-maverick-17b"
 api_key_env = "OPENAI_API_KEY"
 env_file = ".env.parley"
@@ -47,6 +50,7 @@ caps = { json_schema = true, thinking_toggle = false, thinking_budget_field = ""
 
 [haiku]
 base_url = "https://parley.api.mit.edu/v1"
+timeout = 60  # a stalled request is retried after a minute (provider retries)
 model = "claude-haiku-4-5"
 api_key_env = "OPENAI_API_KEY"
 env_file = ".env.parley"

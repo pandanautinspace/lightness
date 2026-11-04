@@ -93,6 +93,8 @@ class Client:
         caps = Caps(**entry.get("caps", {}))
         if "api_key_env" in entry:
             kwargs.setdefault("api_key", _api_key(entry["api_key_env"], entry.get("env_file")))
+        if "timeout" in entry:
+            kwargs.setdefault("timeout", float(entry["timeout"]))
         return cls(entry["base_url"], entry["model"], caps=caps, sampling=entry.get("sampling"), **kwargs)
 
     def chat(

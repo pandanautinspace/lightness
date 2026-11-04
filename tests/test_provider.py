@@ -94,14 +94,24 @@ def test_calls_are_logged_with_purpose_and_usage(tmp_path):
 def test_rate_limits_and_server_errors_are_retried(monkeypatch):
     monkeypatch.setattr("lightness.provider.time.sleep", lambda s: None)
     answers = iter([httpx.Response(429, json={"error": {"message": "slow down"}}),
-                    httpx.Response(502, text="bad gateway")])
+                    httpx.ReadTimeout("stalled"), httpx.Response(502, text="bad gateway")])
 
     def handler(request):
         try:
-            return next(answers)
+            answer = next(answers)
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
         except StopIteration:
             return httpx.Response(200, json={"choices": [{"message": {"content": "hi"}, "finish_reason": "stop"}],
                                              "usage": {}})
 
     client = Client("http://x", "m", transport=httpx.MockTransport(handler))
     assert client.chat([{"role": "user", "content": "x"}], purpose="t").text == "hi"
+
+
+def test_hosted_models_time_out_after_a_minute_and_local_ones_keep_the_default():
+    from lightness.provider import Client
+
+    assert Client.from_registry("haiku", api_key="x").http.timeout.read == 60
+    assert Client.from_registry("qwen27").http.timeout.read == 900

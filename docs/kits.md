@@ -421,3 +421,38 @@ try commands; none spent 8.1k on try commands and 1.5k on python snippets.
 - No submit was refused: every run's checks passed by the time it submitted.
 
 Next: the same screen on the local 35B (the reason for this arm), then 3 runs per task if it holds.
+
+#### Screen: none vs checks on the local 35B (4 tasks × 1 run), 2026-11-04
+
+qwen35a3 on the 4-task subset (json-viewer, loan-calc, stopwatch, airport-lookup), code at
+`8b8828c`. Both arms were run fresh: the `advance` and submit fixes changed `none` too. Batches
+`runs/kit-tui-20261104-{205419,212836}-mw-env.guard.kit-tests.{checks,none}-qwen35a3-*`.
+
+| metric (mean per run) | none | checks | earlier none | earlier first |
+|---|---|---|---|---|
+| hidden spec tests passed, % | 95.0 | 92.5 | 95.0 | 95.0 |
+| hidden intent tests passed, % | 8.3 | 33.3 | 8.3 | 8.3 |
+| output tokens per run | 26559 | 19928 | 31091 | 23522 |
+| agent wall time per run, s | 574 | 499 | 799 | 555 |
+| steps per run | 38 | 53 | 60 | 42 |
+| steps after the last app change | 13 | 30 | 21 | 22 |
+| runs at a limit | 0 | 0 | 1 | 0 |
+
+Per task, spec · intent: json-viewer 10/10 · 0/3 vs 10/10 · 2/3; loan-calc 11/11 · 1/3 vs
+11/11 · 2/3; stopwatch 6/8 · 0/3 in both; airport-lookup 11/11 · 0/3 vs 10/11 · 0/3.
+
+**Findings**
+
+- **Faster, but less so than on Haiku.** checks was 13% faster and used 25% fewer output
+  tokens than the fresh none run. Most of the gain came from writing the app fewer times
+  (4.8k tokens vs 8.7k) and reading fewer files (1.9k vs 7.2k). Writing `checks.txt` cost 2.9k
+  tokens (81 s) per run, and try commands went up (7.8k vs 5.7k).
+- **The 35B did not use the arm as intended.** In all 4 runs it wrote the app first and
+  `checks.txt` later (step 16–35), and it kept running try_app by hand after its checks passed.
+  That is why steps after the last app change rose from 13 to 30. No regression was reported
+  and no submit was refused.
+- **Intent tests rose from 1 to 4 of 12** (json-viewer +2, loan-calc +1), while one spec test
+  was lost (airport-lookup). Both none runs and the first run got 1 of 12, so this is the only
+  movement seen on the 35B. With 1 run per task it is still within noise.
+- The fresh none run was faster than the earlier one (574 s vs 799 s) and had no blown runs.
+  The earlier run had a ContextOverflow and a TimeExceeded; the `advance` fix likely helped.

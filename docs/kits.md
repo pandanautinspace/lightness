@@ -451,8 +451,10 @@ Per task, spec · intent: json-viewer 10/10 · 0/3 vs 10/10 · 2/3; loan-calc 11
   `checks.txt` later (step 16–35), and it kept running try_app by hand after its checks passed.
   That is why steps after the last app change rose from 13 to 30. No regression was reported
   and no submit was refused.
-- **Intent tests rose from 1 to 4 of 12** (json-viewer +2, loan-calc +1), while one spec test
-  was lost (airport-lookup). Both none runs and the first run got 1 of 12, so this is the only
-  movement seen on the 35B. With 1 run per task it is still within noise.
+- **checks passed more hidden tests in total: 41 of 52 vs 39 of 52.** json-viewer (12/13) and
+  loan-calc (13/14) each missed only one test, against 10/13 and 12/14 under none. The gain is
+  all in intent tests (4 of 12 vs 1 of 12). airport-lookup lost one spec test (10/14 vs 11/14),
+  and stopwatch was the same (6/11). Every earlier 35B run, in any arm, got 1 of 12 intent
+  tests, so this is the first time the score has moved. It is still 1 run per task.
 - The fresh none run was faster than the earlier one (574 s vs 799 s) and had no blown runs.
   The earlier run had a ContextOverflow and a TimeExceeded; the `advance` fix likely helped.

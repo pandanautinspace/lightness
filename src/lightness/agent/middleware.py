@@ -335,7 +335,11 @@ class Kit(Middleware):
             return None
         prev = ctx.data.get("kit.checks")
         ctx.data["kit.checks"] = now
-        regressions = [n for n, v in now.items() if v is not None and prev and n in prev and prev[n] is None]
+        app_changed = ctx.data.get("kit.checks_app") != ctx.data.get("kit.sig")
+        ctx.data["kit.checks_app"] = ctx.data.get("kit.sig")
+        # a check that passed before fails now after the app changed (not after the check itself changed)
+        regressions = [n for n, v in now.items() if v is not None and prev and n in prev and prev[n] is None
+                       and app_changed]
         ctx.log("kit.checks", passed=sum(v is None for v in now.values()),
                 failing=[n for n, v in now.items() if v is not None], regressions=regressions)
         if now == prev:

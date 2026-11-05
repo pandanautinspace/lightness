@@ -135,7 +135,7 @@ def main(
     suite: str = typer.Option("tasks", help="task folder under bench/: tasks (main benchmark), kit-tui, ..."),
     runs: int = typer.Option(1, help="runs per task"),
     jobs: int = typer.Option(1, help="runs at once (keep 1 for a local server: it serves one request at a time)"),
-    tests: str = typer.Option("none", help="kit testing arm: none | first | after (see docs/kits.md)"),
+    tests: str = typer.Option("none", help="kit testing arm: none | first | after | checks (see docs/kits.md)"),
     out: Path = typer.Option(REPO_ROOT / "runs"),
 ):
     task_ids = all_task_ids(suite) if tasks == "all" else tasks.split(",")

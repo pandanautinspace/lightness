@@ -589,3 +589,89 @@ def test_headless_test_part_passes_its_own_tests():
     proc = subprocess.run([sys.executable, "-m", "pytest", str(TUI / "parts" / "headless_test.py"), "-q",
                            "-p", "no:cacheprovider"], capture_output=True, text=True, timeout=120, check=False)
     assert proc.returncode == 0, proc.stdout[-2000:]
+
+
+CHECKED = """\
+import json
+from pathlib import Path
+
+from textual.app import App
+from textual.widgets import Input, Static
+
+
+class Counter(App):
+    BINDINGS = [("plus", "bump", "Add"), ("d", "boom", "Delete"), ("ctrl+q", "quit", "Quit")]
+
+    def __init__(self, path="count.json", now=None):
+        super().__init__()
+        self.path, self.now = Path(path), now
+        self.n = json.loads(self.path.read_text()) if self.path.exists() else 0
+        self.path.write_text(json.dumps(self.n + START))  # START=1: overwrites the saved file on start
+
+    def compose(self):
+        if WITH_INPUT:  # focused from the start: typed keys go into it
+            yield Input(id="name")
+        yield Static(id="shown")
+
+    def on_mount(self):
+        self.query_one("#shown", Static).update(f"count {self.n}")
+
+    def action_bump(self):
+        self.n += 1
+        self.path.write_text(json.dumps(self.n))
+        self.query_one("#shown", Static).update(f"count {self.n}")
+
+    def action_boom(self):
+        if BOOM:
+            1 / 0
+"""
+COUNTER = {"module": "counter", "app_class": "Counter", "sample_data": "3",
+           "params": [{"name": "path", "role": "data", "file": "count.json"}, {"name": "now", "role": "clock", "file": ""}]}
+
+
+def counter(start=0, boom=False, with_input=False) -> str:
+    """The Counter app; start=1 overwrites its file on start, boom makes d crash."""
+    return CHECKED.replace("START", str(start)).replace("BOOM", str(boom)).replace("WITH_INPUT", str(with_input))
+
+
+def test_try_app_expect_steps(tmp_path):
+    (tmp_path / "counter.py").write_text(counter())
+    out = try_app(tmp_path, COUNTER, "--data", "3", "expect:count 3", "expect-not:count 4", "expect-file:path=3",
+                  "press:plus", "expect:count 5", "expect-file:path=4")
+    assert "ok: expect:count 3\nok: expect-not:count 4\nok: expect-file:path=3" in out
+    assert "FAILED expect:count 5: not on the screen. Screen now:\n" in out and "#shown: 'count 4'" in out
+    assert "ok: expect-file:path=4" in out  # without --checks a failed expect doesn't stop the run
+
+
+def test_try_app_checks_file(tmp_path):
+    (tmp_path / "counter.py").write_text(counter())
+    (tmp_path / "checks.txt").write_text(
+        "# comment\n\n"
+        "bump: --file-text path=3 press:plus expect:\"count 4\" expect-file:path=4 restart expect:\"count 4\"\n"
+        "wrong: press:plus expect:\"count 9\" press:plus\n"
+        "no name here\n"
+        "quotes: expect:\"oops\n"
+        "bad option: --nope expect:x\n")
+    out = try_app(tmp_path, COUNTER, "--checks", "checks.txt")
+    assert "PASS bump\n" in out
+    assert "FAIL wrong\n" in out and "FAILED expect:count 9" in out and "after press:plus:\n      #shown: 'count 1'" in out
+    assert "FAIL line 5\n    a check line starts with its name" in out
+    assert "FAIL quotes\n    can't split the line into steps" in out
+    assert "FAIL bad option\n" in out
+    assert out.strip().endswith("1 of 5 checks pass")
+
+
+def test_try_app_builtin_checks(tmp_path):
+    (tmp_path / "counter.py").write_text(counter(with_input=True))
+    out = try_app(tmp_path, COUNTER, "--builtin")
+    assert out.splitlines() == ["PASS harness: every key works, starting with no data file",
+                                "PASS harness: every key works, starting with the sample path file",
+                                "PASS harness: time moves (an hour on the fake clock)", "3 of 3 checks pass"]
+    (tmp_path / "counter.py").write_text(counter(boom=True, with_input=True))  # starts in the Input: keys type text
+    out = try_app(tmp_path, COUNTER, "--builtin")
+    assert ("FAIL harness: every key works, starting with no data file\n"
+            "    pressing plus, d with nothing focused crashes on d:") in out
+    assert "ZeroDivisionError" in out
+    (tmp_path / "counter.py").write_text(counter(start=1))
+    out = try_app(tmp_path, COUNTER, "--builtin")
+    assert "after pressing plus, d the path file held 1; starting the app again changed it to 2" in out

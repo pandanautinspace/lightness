@@ -276,7 +276,7 @@ def test_text_tool_call_recovery():
     assert text_tool_call("No command here.") is None
 
 
-@pytest.mark.parametrize("tests", ["none", "first", "after"])
+@pytest.mark.parametrize("tests", ["none", "first", "after", "checks"])
 def test_kit_testing_arms(ws, tests):
     run_dir = ws.parent
     env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
@@ -285,14 +285,34 @@ def test_kit_testing_arms(ws, tests):
     first_user = client.seen[0][1]["content"]
     assert "{testing}" not in first_user
     assert ("Before writing the app, write tests" in first_user) == (tests == "first")
-    assert ("Write test files only if the task asks" in first_user) == (tests != "first")
+    assert ("Write test files only if the task asks" in first_user) == (tests in ("none", "after"))
     assert ("### Part `headless_test`" in first_user) == (tests == "first")
+    assert ("## Checks" in first_user and "expect-file:data_path=" in first_user) == (tests == "checks")
     if tests == "after":  # the first submit asks for tests and shows the guide; the second goes through
         assert res.submitted and res.steps == 2
         reply = tool_outputs(client)[0]
         assert reply.startswith(mw.TESTS_AFTER) and "### Part `headless_test`" in reply
     else:
         assert res.submitted and res.steps == 1
+
+
+def test_kit_checks_arm_reports_regressions_and_refuses_one_submit(ws):
+    checks = write("checks.txt", "count: --file-text data_path='[{\"text\": \"a\"}]' expect:\"1 notes\"\n"
+                                 "empty: expect-not:\"notes\"\n")
+    show_count = """sed -i '' 's/update("")/update(f"{len(self.data)} notes" if self.data else "")/' notes.py"""
+    off_by_one = """sed -i '' 's/len(self.data)} notes" if self.data else ""/len(self.data) + 1} notes"/' notes.py"""
+    run_dir = ws.parent
+    env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
+    client = KitClient([checks, show_count, off_by_one, SUBMIT, SUBMIT, "echo never"], NOTES)
+    res = TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("checks")], step_limit=8).run("notes app")
+    outs = tool_outputs(client)
+    assert "[automatic checks] 1 of 2 checks pass.\nFAIL count\n" in outs[0] and "FAILED expect:1 notes" in outs[0]
+    assert "[automatic checks] 2 of 2 checks pass." in outs[1]
+    assert "FAIL count (passed before this change)" in outs[2] and "FAIL empty (passed before this change)" in outs[2]
+    assert outs[3].startswith(mw.CHECKS_REFUSED) and "0 of 2 checks pass" in outs[3]
+    assert res.submitted and res.steps == 5  # refused once only
+    events = [json.loads(line) for line in (run_dir / "events.jsonl").read_text().splitlines()]
+    assert [e["regressions"] for e in events if e.get("event") == "kit.checks"] == [[], [], ["count", "empty"]]
 
 
 def test_bench_labels_the_testing_arm():

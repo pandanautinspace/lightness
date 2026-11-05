@@ -361,3 +361,24 @@ code at `13a5b7d`. Tasks: json-viewer, loan-calc, stopwatch and airport-lookup. 
 
 **Recommendation:** unchanged, keep **none** as the default. If the time and limit savings on
 the 35B matter, the next step is 3 runs per task on these 4 tasks (about 4.5 hours locally).
+
+### Checks arm (`--tests checks`), 2026-11-04
+
+Why: on the 35B, writing pytest files cost about 13k output tokens per run (the whole file
+written again 3–6 times at ~50 tokens/s) and caught no regressions. In this arm the harness
+does the test work:
+
+- **The harness's own checks**, from the kit's names alone, run after every change and cost the
+  model nothing: every key the app binds works without crashing (at the start focus, on up to
+  two focusable non-text widgets, and with nothing focused when the start focus takes text),
+  with no data file and with the sample file; if a key saved a file, starting again leaves it
+  as saved; and an hour on the fake clock doesn't crash. These are facts about any TUI app.
+- **The model's checks** are one line each in `checks.txt`, in the try command's step syntax
+  plus `expect:TEXT`, `expect-not:TEXT` and `expect-file:PARAM=TEXT` (format in
+  `kits/tui/checks.md`). Each runs in a fresh app.
+- After each change to the app or `checks.txt` (once the app starts), the harness runs both and
+  reports what changed, marking checks that passed before and fail now. The first submit is
+  refused while checks fail. Events: `kit.checks` (with `regressions`) and `kit.checks_refused`.
+
+Other arms are unchanged except that the try command's `advance` now waits only for the app's
+own timers (not Textual's, e.g. the Input cursor blink), which makes `advance` faster.

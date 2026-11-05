@@ -13,6 +13,10 @@ def classify(cmd: str, module: str | None) -> str:
     c = re.sub(r"^(cd\s+\S+\s*&&\s*)+", "", cmd.strip())
     if "COMPLETE_TASK_AND_SUBMIT" in c:
         return "submit"
+    if re.search(r"(sed -i|perl -pi|>>).*checks\.txt", c):
+        return "edit:checks"
+    if re.search(r">\s*['\"]?checks\.txt|checks\.txt\s*<<", c):
+        return "write:checks"
     m = APP_WRITE.search(c)
     if m:
         f = (m.group("f") or m.group("g") or "").split("/")[-1]
@@ -40,7 +44,7 @@ def classify(cmd: str, module: str | None) -> str:
 
 
 APP_CHANGE = ("write:app", "edit:partial")
-TEST_CHANGE = ("write:test", "edit:test")
+TEST_CHANGE = ("write:test", "edit:test", "write:checks", "edit:checks")
 FAILED = re.compile(r"^(?:FAILED|ERROR) (\S+)", re.M)
 COUNTS = re.compile(r"(\d+) (passed|failed|errors?)\b")
 
@@ -70,6 +74,17 @@ def regressions_caught(steps: list[dict]) -> int:
                 pending = True
             prev, app_changed = failing, False
     return count
+
+
+def checks_regressions(events: list[dict]) -> tuple[int, int]:
+    """(regressions the harness's checks reported, of those the ones that passed again later)."""
+    reported, caught = 0, 0
+    checks = [e for e in events if e.get("event") == "kit.checks"]
+    for i, e in enumerate(checks):
+        for name in e.get("regressions", []):
+            reported += 1
+            caught += any(name not in later.get("failing", []) for later in checks[i + 1:])
+    return reported, caught
 
 
 def run_stats(d: Path) -> dict | None:
@@ -118,7 +133,7 @@ def run_stats(d: Path) -> dict | None:
             "tool_s": max(0.0, nxt - c["ts"]), "cmd": cmd,
             "obs": obs.get(tcs[0].get("id"), "") if tcs else "",
         })
-    return {"module": module, "steps": steps}
+    return {"module": module, "steps": steps, "checks_regressions": checks_regressions(events)}
 
 
 def main():

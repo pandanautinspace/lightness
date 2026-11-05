@@ -201,6 +201,22 @@ TESTS_AFTER = ("Not submitted yet. Before submitting: write tests for the task's
                "fix what fails, then submit.")
 
 
+CHECKS_REFUSED = ("Not submitted yet: some checks fail. Fix the app, or a check in checks.txt that disagrees with "
+                  "the task, then submit again.")
+CHECKS_SHOWN, CHECK_LINES = 4, 15  # failing checks shown in full, and lines of each
+
+
+def checks_text(results: dict[str, str | None], regressions: list[str]) -> str:
+    failing = {n: v for n, v in results.items() if v is not None}
+    lines = [f"{len(results) - len(failing)} of {len(results)} checks pass."]
+    for n, detail in list(failing.items())[:CHECKS_SHOWN]:
+        lines.append(f"FAIL {n}" + (" (passed before this change)" if n in regressions else ""))
+        lines += ["  " + line for line in detail.splitlines()[-CHECK_LINES:]]
+    if len(failing) > CHECKS_SHOWN:
+        lines.append(f"Also failing: {', '.join(list(failing)[CHECKS_SHOWN:])}")
+    return "\n".join(lines)
+
+
 class Kit(Middleware):
     """Start new apps from the kit for their type: the harness writes a working shell, shows the
     design notes, a cheat sheet and the parts index, and checks the app still starts after each
@@ -210,7 +226,9 @@ class Kit(Middleware):
 
     def __init__(self, tests: str = "none"):
         """tests: the testing arm. none: try the app, tests only if the task asks; first: write tests
-        from the contract before the app; after: on the first submit, ask for tests before submitting."""
+        from the contract before the app; after: on the first submit, ask for tests before submitting;
+        checks: write the contract as one-line checks the harness runs after every change, along
+        with its own generic checks."""
         from lightness.kits import TEST_ARMS
 
         if tests not in TEST_ARMS:
@@ -275,20 +293,56 @@ class Kit(Middleware):
         if "kit" not in ctx.data or ctx.data["kit"][0].category != "tui":
             return None
         kit, names = ctx.data["kit"]
+        notes = []
         sig = repr(sorted(py_files(ctx.ws).items()))
-        if sig == ctx.data.get("kit.sig"):
-            return None  # nothing changed since the last smoke check
-        ctx.data["kit.sig"] = sig
-        results = smoke.tui(ctx.ws, names, ctx.run_dir)
-        if not results:
+        if sig != ctx.data.get("kit.sig"):  # something changed since the last smoke check
+            ctx.data["kit.sig"] = sig
+            results = smoke.tui(ctx.ws, names, ctx.run_dir)
+            ctx.data["kit.smoke_ok"] = all(r.ok for r in results)
+            if results:
+                warnings = smoke.clashes(ctx.ws, names)
+                text = "\n".join([smoke.summarize(results, f"{names['module']}.py"), *warnings])
+                previous, ctx.data["kit.smoke"] = ctx.data.get("kit.smoke"), text
+                ctx.log("smoke", ok=all(r.ok for r in results), warnings=len(warnings))
+                if text != previous and not (previous is None and all(r.ok for r in results) and not warnings):
+                    notes.append("[automatic start check] " + text)  # only changes (never an initial "fine")
+        if self.tests == "checks" and (report := self._checks(ctx)):
+            notes.append(report)
+        return shorten_paths("\n\n".join(notes), ctx.ws, ctx.run_dir) if notes else None
+
+    def _run_checks(self, ctx: Ctx) -> dict | None:
+        """Run the harness's checks and checks.txt if the app or checks.txt changed since the last run
+        (and the app starts); returns the new results, or None when nothing ran."""
+        from lightness.kits import smoke
+
+        if not ctx.data.get("kit.smoke_ok") or not (ctx.ws / f"{ctx.data['kit'][1]['module']}.py").exists():
             return None
-        warnings = smoke.clashes(ctx.ws, names)
-        text = "\n".join([smoke.summarize(results, f"{names['module']}.py"), *warnings])
-        previous, ctx.data["kit.smoke"] = ctx.data.get("kit.smoke"), text
-        ctx.log("smoke", ok=all(r.ok for r in results), warnings=len(warnings))
-        if text == previous or (previous is None and all(r.ok for r in results) and not warnings):
-            return None  # only report changes (and never an initial "fine")
-        return shorten_paths("[automatic start check] " + text, ctx.ws, ctx.run_dir)
+        checks_file = ctx.ws / smoke.CHECKS_FILE
+        stat = checks_file.stat() if checks_file.exists() else None
+        sig = (ctx.data.get("kit.sig"), stat and (stat.st_mtime_ns, stat.st_size))
+        if sig == ctx.data.get("kit.checks_sig"):
+            return None
+        ctx.data["kit.checks_sig"] = sig
+        return smoke.checks(ctx.ws, ctx.run_dir)
+
+    def _checks(self, ctx: Ctx) -> str | None:
+        """The checks arm: after a change, rerun the checks and report what changed, marking checks
+        that passed before and fail now."""
+        from lightness.kits import smoke
+
+        now = self._run_checks(ctx)
+        if now is None:
+            return None
+        prev = ctx.data.get("kit.checks")
+        ctx.data["kit.checks"] = now
+        regressions = [n for n, v in now.items() if v is not None and prev and n in prev and prev[n] is None]
+        ctx.log("kit.checks", passed=sum(v is None for v in now.values()),
+                failing=[n for n, v in now.items() if v is not None], regressions=regressions)
+        if now == prev:
+            return None
+        if prev is None and all(v is None for v in now.values()) and not (ctx.ws / smoke.CHECKS_FILE).exists():
+            return None  # only the harness's checks, all passing: nothing to say yet
+        return "[automatic checks] " + checks_text(now, regressions)
 
     def on_submit(self, ctx: Ctx) -> str | None:
         """Refuse to submit an app that crashes on start (no limit: the step and wall limits apply)."""
@@ -302,6 +356,15 @@ class Kit(Middleware):
             ctx.log("smoke.submit_refused")
             return shorten_paths("Not submitted: the app crashes on start.\n"
                                  + smoke.summarize(bad, f"{names['module']}.py"), ctx.ws, ctx.run_dir)
+        if self.tests == "checks" and not ctx.data.get("kit.checks_refused"):
+            ctx.data["kit.smoke_ok"] = True
+            if (now := self._run_checks(ctx)) is not None:
+                ctx.data["kit.checks"] = now
+            failing = [n for n, v in (ctx.data.get("kit.checks") or {}).items() if v is not None]
+            if failing:
+                ctx.data["kit.checks_refused"] = True
+                ctx.log("kit.checks_refused", failing=failing)
+                return shorten_paths(CHECKS_REFUSED + "\n" + checks_text(ctx.data["kit.checks"], []), ctx.ws, ctx.run_dir)
         if self.tests == "after" and not ctx.data.get("kit.tests_asked"):
             from lightness.kits import part_text
 

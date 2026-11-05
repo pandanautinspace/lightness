@@ -15,13 +15,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from analyze_cost import APP_CHANGE, regressions_caught, run_stats  # noqa: E402
 
-KINDS = ("write:app", "edit:partial", "write:test", "edit:test", "run:try", "run:pytest", "run:python-snippet",
+KINDS = ("write:app", "edit:partial", "write:test", "edit:test", "write:checks", "edit:checks", "run:try", "run:pytest", "run:python-snippet",
          "read:workspace", "other")
 LIMITS = ("LimitsExceeded", "TimeExceeded")
 
 
 def run_metrics(run_dir: Path, row: dict) -> dict:
-    st = run_stats(run_dir) or {"steps": []}
+    st = run_stats(run_dir) or {"steps": [], "checks_regressions": (0, 0)}
     steps = st["steps"]
     app_steps = [x["i"] for x in steps if x["kind"] in APP_CHANGE]
     kinds_out, kinds_s = collections.Counter(), collections.Counter()
@@ -47,6 +47,8 @@ def run_metrics(run_dir: Path, row: dict) -> dict:
         "steps": len(steps),
         "tail": len(steps) - max(app_steps) if app_steps else len(steps),
         "regressions": regressions_caught(steps),
+        "checks_reported": st["checks_regressions"][0],
+        "checks_caught": st["checks_regressions"][1],
         "limit": row.get("exit_status") in LIMITS,
         "kinds_out": kinds_out,
         "kinds_s": kinds_s,
@@ -101,6 +103,8 @@ def main() -> None:
         ("steps per run", mean("steps"), "{:.0f}"),
         ("steps after the last app change", mean("tail"), "{:.0f}"),
         ("regressions caught (per sweep of 9)", total("regressions"), "{:.1f}"),
+        ("harness checks: regressions reported (per sweep)", total("checks_reported"), "{:.1f}"),
+        ("harness checks: of those, passing again later (per sweep)", total("checks_caught"), "{:.1f}"),
         ("runs that hit the step or wall limit (of 9)", total("limit"), "{:.1f}"),
         ("infrastructure: empty replies per run", mean("empty"), "{:.1f}"),
         ("infrastructure: calls ≥ 60 s (timed out and retried) per run", mean("stalled"), "{:.2f}"),

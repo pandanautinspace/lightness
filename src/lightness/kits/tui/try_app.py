@@ -5,8 +5,14 @@ Copied into the workspace by the harness; the model runs it instead of writing t
     python .lightness/kit/try_app.py [--file NAME=PATH] [--file-text NAME=TEXT] [--kw NAME=VALUE] STEP ...
 
 Steps: type:TEXT  press:KEY[,KEY...]  click:#id  focus:#id  wait:SECONDS  advance:SECONDS  restart
+       expect:TEXT  expect-not:TEXT  expect-file:PARAM=TEXT
 After the start and after each step it prints what changed (visible widgets, focus, screen,
 notifications, any crash) and the contents of each data file the app keeps.
+
+    python .lightness/kit/try_app.py --checks checks.txt [--builtin]
+
+runs each line of checks.txt (NAME: [options] STEP ...) in a fresh app and prints PASS or FAIL
+per line; --builtin adds the harness's own checks (every key works, restarts keep saved files).
 
 Each file parameter of the App gets a fresh path. A clock parameter gets a fake clock, which only
 moves on advance:SECONDS.
@@ -15,9 +21,12 @@ moves on advance:SECONDS.
 import argparse
 import ast
 import asyncio
+import contextlib
+import io
 import importlib
 import json
 import math
+import shlex
 import shutil
 import sys
 import tempfile
@@ -31,6 +40,13 @@ TEXT = 300  # characters shown per text value
 CONTAINERS = ("ListView", "DataTable", "Tree", "TextArea", "Input", "Select", "Checkbox", "Switch",
               "RadioSet", "TabbedContent", "Digits", "ProgressBar", "OptionList", "SelectionList", "Log",
               "RichLog", "Tabs", "Footer", "Header")
+
+
+OUT = [sys.stdout]  # where output goes; checks mode swaps in a buffer (Textual resets sys.stdout after a run)
+
+
+def say(*args) -> None:
+    print(*args, file=OUT[0])
 
 
 def plain(renderable) -> str:
@@ -185,7 +201,7 @@ def files_now(data_files: dict[str, Path]) -> list[str]:
 
 def show_files(data_files: dict[str, Path]) -> None:
     for param, path in data_files.items():
-        print(f"  {param} file: {file_text(path)}")
+        say(f"  {param} file: {file_text(path)}")
 
 
 class FakeClock:
@@ -199,13 +215,15 @@ class FakeClock:
 
 
 def timer_period(app) -> float:
-    """The longest period of the running repeating timers (set_interval) on the app, its screens
-    and widgets, capped at a second: long enough for each of them to tick once."""
+    """The longest period of the app's own running repeating timers (set_interval) on the app, its
+    screens and widgets, capped at a second: long enough for each of them to tick once. Textual's
+    own timers (cursor blink, ...) don't count."""
     periods = [0.0]
     for screen in app.screen_stack:
         for node in [app, screen, *screen.walk_children()]:
             for timer in list(getattr(node, "_timers", ())):
-                if timer._repeat != 0 and timer._active.is_set():
+                own = not (getattr(timer._callback, "__module__", "") or "").startswith("textual")
+                if own and timer._repeat != 0 and timer._active.is_set():
                     periods.append(timer._interval)
     return min(1.0, max(periods))
 
@@ -222,12 +240,12 @@ async def advance(app, pilot, clock: FakeClock, seconds: float) -> None:
 def show(state: dict[str, list[str]]) -> None:
     for lines in state.values():
         for line in lines:
-            print("  " + line)
+            say("  " + line)
 
 
 def show_changes(before: dict[str, list[str]], after: dict[str, list[str]], files_changed: bool = False) -> None:
     if before.get("screen") != after.get("screen"):
-        print(f"  (now on {after['screen'][0][8:] if 'screen' in after else 'the main screen'})")
+        say(f"  (now on {after['screen'][0][8:] if 'screen' in after else 'the main screen'})")
         show(after)
         return
     changed = False
@@ -235,13 +253,38 @@ def show_changes(before: dict[str, list[str]], after: dict[str, list[str]], file
         if before.get(key) != lines:
             changed = True
             for line in lines:
-                print("  " + line)
+                say("  " + line)
     for key in before:
         if key not in after:
             changed = True
-            print(f"  {key}: (no longer shown)")
+            say(f"  {key}: (no longer shown)")
     if not changed and not files_changed:
-        print("  (nothing changed)")
+        say("  (nothing changed)")
+
+
+def screen_text(state: dict[str, list[str]]) -> str:
+    return " ".join(" ".join(line.split()) for lines in state.values() for line in lines)
+
+
+def expectation(action: str, value: str, state: dict[str, list[str]], data_files: dict[str, Path]) -> str | None:
+    """None if the expect step holds, else what is wrong."""
+    if action == "expect-file":
+        param, sep, want = value.partition("=")
+        if not sep or param not in data_files:
+            return f"expect-file takes PARAM=TEXT with PARAM one of the data files: {', '.join(data_files) or 'none'}"
+        path = data_files[param]
+        if not path.exists():
+            return "the file was not created"
+        got = path.read_text(errors="replace")
+        try:
+            same = json.loads(got) == json.loads(want)
+        except ValueError:
+            same = got.strip() == want.strip()
+        return None if same else f"the file holds {file_text(path)}"
+    found = " ".join(value.split()) in screen_text(state)
+    if action == "expect":
+        return None if found else "not on the screen"
+    return "it is on the screen" if found else None
 
 
 def crash_text() -> str:
@@ -251,9 +294,10 @@ def crash_text() -> str:
     return "\n".join("  " + line for line in keep[-6:])
 
 
-async def run(cls, kw, data_files: dict[str, Path], clock: FakeClock | None, steps) -> int:
-    pending = list(steps)
-    print("started:")
+async def run(cls, kw, data_files: dict[str, Path], clock: FakeClock | None, steps, stop_on_fail=False) -> int:
+    """Returns 0, 1 on a crash, 2 on a bad step, 3 when an expect step failed."""
+    pending, failed = list(steps), False
+    say("started:")
     while True:
         restart = False
         app = None
@@ -269,15 +313,27 @@ async def run(cls, kw, data_files: dict[str, Path], clock: FakeClock | None, ste
                     if step == "restart":
                         restart = True
                         break
-                    print(f"after {step}:")
                     action, _, value = step.partition(":")
+                    if action in ("expect", "expect-not", "expect-file"):
+                        problem = expectation(action, value, snapshot(app), data_files)
+                        if problem is None:
+                            say(f"ok: {step}")
+                            continue
+                        failed = True
+                        say(f"FAILED {step}: {problem}. Screen now:")
+                        show(snapshot(app))
+                        show_files(data_files)
+                        if stop_on_fail:
+                            return 3
+                        continue
+                    say(f"after {step}:")
                     if action == "type":
                         await pilot.press(*value)
                     elif action == "press":
                         await pilot.press(*[k.strip() for k in value.split(",") if k.strip()])
                     elif action in ("click", "focus") and not app.screen.query(value):
                         ids = sorted(f"#{w.id}" for w in app.screen.query("*") if w.id and not w.id.startswith("-"))
-                        print(f"  no widget matches {value!r} on this screen; ids here: {', '.join(ids) or 'none'}")
+                        say(f"  no widget matches {value!r} on this screen; ids here: {', '.join(ids) or 'none'}")
                         continue
                     elif action == "click":
                         await pilot.click(value)
@@ -286,36 +342,37 @@ async def run(cls, kw, data_files: dict[str, Path], clock: FakeClock | None, ste
                     elif action == "wait":
                         await asyncio.sleep(float(value))
                     elif action == "advance" and clock is None:
-                        print(f"  advance needs a clock parameter, and {cls.__name__} has none (wait:SECONDS waits in real time)")
+                        say(f"  advance needs a clock parameter, and {cls.__name__} has none (wait:SECONDS waits in real time)")
                         continue
                     elif action == "advance":
                         await advance(app, pilot, clock, float(value))
                     else:
-                        print(f"  unknown step {step!r} (use type:, press:, click:, focus:, wait:, advance:, restart)")
+                        say(f"  unknown step {step!r} (use type:, press:, click:, focus:, wait:, advance:, restart, "
+                              "expect:, expect-not:, expect-file:)")
                         return 2
                     await pilot.pause()
                     if not app.is_running:
-                        print("  the app exited")
+                        say("  the app exited")
                         show_files(data_files)
                         if pending and pending[0] == "restart":
                             pending.pop(0)
                             restart = True
                         elif pending:
-                            print(f"  steps not run: {pending}")
-                            return 0
+                            say(f"  steps not run: {pending}")
+                            return 3 if failed else 0
                         break
                     new, new_files = snapshot(app), files_now(data_files)
                     show_changes(state, new, new_files != files)
                     show_files(data_files)
                     state, files = new, new_files
         except Exception:  # noqa: BLE001 - report any crash of the app under test
-            print("CRASH:")
-            print(crash_text())
+            say("CRASH:")
+            say(crash_text())
             show_files(data_files)
             return 1
         if not restart:
-            return 0
-        print("after restart (same files):")
+            return 3 if failed else 0
+        say("after restart (same files):")
 
 
 def pairs(items: list[str], flag: str, names: list[str]) -> dict[str, str] | None:
@@ -323,17 +380,13 @@ def pairs(items: list[str], flag: str, names: list[str]) -> dict[str, str] | Non
     for item in items:
         key, sep, value = item.partition("=")
         if not sep or key not in names:
-            print(f"{flag} takes NAME=VALUE with NAME one of the App's file parameters: {', '.join(names) or 'none'}")
+            say(f"{flag} takes NAME=VALUE with NAME one of the App's file parameters: {', '.join(names) or 'none'}")
             return None
         out[key] = value
     return out
 
 
-def main() -> int:
-    config = json.loads((Path(__file__).parent / "try_app.json").read_text())
-    params = config.get("params") or []
-    files = [p for p in params if p["role"] in FILE_ROLES]
-    names = [p["name"] for p in files]
+def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--file", action="append", default=[], metavar="NAME=PATH",
                    help="start file parameter NAME with a copy of PATH")
@@ -342,28 +395,39 @@ def main() -> int:
     p.add_argument("--data", help="TEXT for the App's only file parameter (same as --file-text NAME=TEXT)")
     p.add_argument("--data-from", help="PATH for the App's only file parameter (same as --file NAME=PATH)")
     p.add_argument("--kw", action="append", default=[], help="extra App argument NAME=VALUE (Python literal)")
+    p.add_argument("--checks", metavar="FILE", help="run each line of FILE (NAME: [options] STEP ...) as a check")
+    p.add_argument("--builtin", action="store_true", help="also run the harness's own checks")
     p.add_argument("steps", nargs="*")
-    a = p.parse_args()
+    return p
+
+
+def load_app(config: dict):
+    sys.path.insert(0, ".")
+    return getattr(importlib.import_module(config["module"]), config["app_class"])
+
+
+def prepare(config: dict, a, tmp: Path):
+    """The App's arguments for these options: (kw, data files, fake clock, what was passed), or an exit code."""
+    params = config.get("params") or []
+    files = [p for p in params if p["role"] in FILE_ROLES]
+    names = [p["name"] for p in files]
     texts, copies = pairs(a.file_text, "--file-text", names), pairs(a.file, "--file", names)
     if texts is None or copies is None:
         return 2
     if a.data is not None or a.data_from:
         if len(files) != 1:
-            print(f"--data/--data-from need exactly one file parameter, and {config['app_class']} has "
+            say(f"--data/--data-from need exactly one file parameter, and {config['app_class']} has "
                   f"{len(files)}{': ' + ', '.join(names) if names else ''}. Use --file NAME=PATH or --file-text NAME=TEXT.")
             return 2
         if a.data is not None:
             texts[names[0]] = a.data
         else:
             copies[names[0]] = a.data_from
-    sys.path.insert(0, ".")
-    cls = getattr(importlib.import_module(config["module"]), config["app_class"])
-    tmp = Path(tempfile.mkdtemp(prefix="try-", dir=".lightness"))
     kw, data_files, said = {}, {}, []
     for f in files:
         default = f.get("file") or ("data.json" if f["role"] == "data" else "input.txt")
         path = tmp / f["name"] / default
-        path.parent.mkdir()
+        path.parent.mkdir(parents=True)
         if f["name"] in texts:
             path.write_text(texts[f["name"]])
         elif f["name"] in copies:
@@ -387,12 +451,211 @@ def main() -> int:
             kw[key] = ast.literal_eval(value)
         except (ValueError, SyntaxError):
             kw[key] = value
-    if said:
-        print("parameters: " + "; ".join(said))
+    return kw, data_files, clock, said
+
+
+def try_once(config: dict, cls, a, stop_on_fail=False) -> int:
+    tmp = Path(tempfile.mkdtemp(prefix="try-", dir=".lightness"))
     try:
-        return asyncio.run(run(cls, kw, data_files, clock, a.steps))
+        prepared = prepare(config, a, tmp)
+        if isinstance(prepared, int):
+            return prepared
+        kw, data_files, clock, said = prepared
+        if said:
+            say("parameters: " + "; ".join(said))
+        return asyncio.run(run(cls, kw, data_files, clock, a.steps, stop_on_fail))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+DETAIL = 30  # lines of a failing check's output shown
+
+
+def file_checks(config: dict, cls, path: Path) -> list[tuple[str, str | None]]:
+    """(name, None if it passed else its output) for each line of a checks file."""
+    out = []
+    for n, line in enumerate(path.read_text().splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        name, sep, rest = line.partition(": ")
+        if not sep:
+            out.append((f"line {n}", "a check line starts with its name and ': ' (NAME: [options] STEP ...)"))
+            continue
+        buf = io.StringIO()
+        OUT[0] = buf
+        with contextlib.redirect_stderr(buf):
+            try:
+                rc = try_once(config, cls, parser().parse_args(shlex.split(rest)), stop_on_fail=True)
+            except ValueError as e:  # shlex: unbalanced quotes
+                rc = 2
+                say(f"can't split the line into steps: {e}")
+            except SystemExit:  # argparse rejected an option
+                rc = 2
+            finally:
+                OUT[0] = sys.stdout
+        lines = buf.getvalue().rstrip().splitlines()
+        out.append((name.strip(), None if rc == 0 else "\n".join(lines[-DETAIL:])))
+    return out
+
+
+def app_keys(cls) -> list[str]:
+    """The keys the app's own classes bind (not Textual's defaults), without quit."""
+    keys = []
+    for c in cls.__mro__:
+        if c.__module__ != cls.__module__:
+            continue
+        for b in c.__dict__.get("BINDINGS", []):
+            key, action = (b.key, b.action) if hasattr(b, "key") else (b[0], b[1])
+            if action.split("(")[0].removeprefix("app.") in ("quit", "command_palette"):
+                continue
+            keys += [k.strip() for k in key.split(",") if k.strip()]
+    return list(dict.fromkeys(keys))
+
+
+NO_FOCUS = "nothing"
+
+
+async def focus_targets(cls, kw) -> list[str | None]:
+    """Where keys get pressed: the starting focus, then each focusable widget with an id that
+    doesn't take typed text (at most 2), then nothing focused if the start focus takes text
+    (printable keys typed into an Input never reach the app's bindings)."""
+    from textual.widgets import Input, TextArea
+
+    app = cls(**kw)
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        ids = [f"#{w.id}" for w in app.screen.query("*")
+               if w.focusable and w.id and not w.id.startswith("-") and not isinstance(w, (Input, TextArea))]
+        typing = isinstance(app.focused, (Input, TextArea))
+    return [None] + ids[:2] + ([NO_FOCUS] if typing else [])
+
+
+async def press_keys(cls, kw, data_files, focus: str | None, keys: list[str]) -> str | None:
+    """Press each key in turn in a fresh app (FOCUS focused first). If that changed a data file,
+    start again and check the start leaves the file as it was. None, or what went wrong."""
+    before = files_now(data_files)
+    where = f" with {focus} focused" if focus else ""
+    pressed = []
+    try:
+        app = cls(**kw)
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            if focus == NO_FOCUS:
+                app.set_focus(None)
+                await pilot.pause()
+            elif focus and app.screen.query(focus):
+                app.screen.query_one(focus).focus()
+                await pilot.pause()
+            for key in keys:
+                pressed.append(key)
+                await pilot.press(key)
+                await pilot.pause()
+                if not app.is_running:
+                    break
+    except Exception:  # noqa: BLE001
+        return f"pressing {', '.join(pressed)}{where} crashes on {pressed[-1] if pressed else 'start'}:\n" + crash_text()
+    saved = files_now(data_files)
+    if saved == before:
+        return None
+    try:
+        app = cls(**kw)
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+    except Exception:  # noqa: BLE001
+        return f"after pressing {', '.join(pressed)}{where} the app saved its file, then crashes when started again:\n" + crash_text()
+    for param, was, now in zip(data_files, saved, files_now(data_files)):
+        if was != now:
+            return (f"after pressing {', '.join(pressed)}{where} the {param} file held {was}; starting the app "
+                    f"again changed it to {now} (a start must load the saved file, not overwrite it)")
+    return None
+
+
+def builtin_checks(config: dict, cls) -> list[tuple[str, str | None]]:
+    """Checks every app of this kind should pass: each bound key works (no crash) with no data file
+    and with the sample file, a start keeps what was saved, and time can move."""
+    params = config.get("params") or []
+    files = [p for p in params if p["role"] in FILE_ROLES]
+    sample = (config.get("sample_data") or "").strip()
+    cases = [("no data file" if any(p["role"] == "data" for p in files) else "a fresh start", [])]
+    if files and sample:
+        cases.append((f"the sample {files[0]['name']} file", [f"{files[0]['name']}={sample}"]))
+    keys = app_keys(cls)[:12]
+    out = []
+
+    async def fresh(file_args: list[str], run):
+        """Run run(kw, data_files) on fresh files for this case."""
+        tmp = Path(tempfile.mkdtemp(prefix="check-", dir=".lightness"))
+        try:
+            kw, data_files, _, _ = prepare(config, parser().parse_args(file_args), tmp)
+            return await run(kw, data_files)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    async def case_check(file_args: list[str]) -> list[str]:
+        try:
+            targets = await fresh(file_args, lambda kw, _: focus_targets(cls, kw))
+        except Exception:  # noqa: BLE001
+            return ["the app crashes on start:\n" + crash_text()]
+        problems = []
+        for focus in targets:
+            problem = await fresh(file_args, lambda kw, files: press_keys(cls, kw, files, focus, keys))
+            if problem is not None:
+                problems.append(problem)
+        return problems
+
+    for label, file_text in cases:
+        if not keys:
+            break
+        problems = asyncio.run(case_check([f"--file-text={t}" for t in file_text]))
+        out.append((f"harness: every key works, starting with {label}", "\n".join(problems[:3]) or None))
+    if any(p["role"] == "clock" for p in params):
+        async def time_moves():
+            tmp = Path(tempfile.mkdtemp(prefix="check-", dir=".lightness"))
+            try:
+                kw, data_files, clock, _ = prepare(config, parser().parse_args([]), tmp)
+                app = cls(**kw)
+                async with app.run_test(size=(100, 30)) as pilot:
+                    await pilot.pause()
+                    for key in keys or [None]:
+                        if key:
+                            await pilot.press(key)
+                        clock.t += 3600 / max(1, len(keys))
+                        await pilot.pause(0.2)  # a jump, not slices: timers tick once and read it
+                return None
+            except Exception:  # noqa: BLE001
+                return "moving the clock an hour (pressing each key on the way) crashes:\n" + crash_text()
+            finally:
+                shutil.rmtree(tmp, ignore_errors=True)
+
+        out.append(("harness: time moves (an hour on the fake clock)", asyncio.run(time_moves())))
+    return out
+
+
+def run_checks(config: dict, cls, a) -> int:
+    results = builtin_checks(config, cls) if a.builtin else []
+    if a.checks:
+        path = Path(a.checks)
+        if path.exists():
+            results += file_checks(config, cls, path)
+        else:
+            say(f"(no {a.checks} yet)")
+    for name, problem in results:
+        say(f"{'PASS' if problem is None else 'FAIL'} {name}")
+        if problem is not None:
+            say("\n".join("    " + line for line in problem.splitlines()))
+    passed = sum(problem is None for _, problem in results)
+    say(f"{passed} of {len(results)} checks pass")
+    return 0 if passed == len(results) else 1
+
+
+def main() -> int:
+    config = json.loads((Path(__file__).parent / "try_app.json").read_text())
+    a = parser().parse_args()
+    cls = load_app(config)
+    if a.checks or a.builtin:
+        return run_checks(config, cls, a)
+    return try_once(config, cls, a)
 
 
 if __name__ == "__main__":

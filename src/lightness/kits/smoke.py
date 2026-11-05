@@ -45,8 +45,9 @@ class SmokeResult:
     detail: str = ""
 
 
-def _python(code: str, ws: Path, run_dir: Path | None, timeout: int) -> subprocess.CompletedProcess:
-    cmd = [str(BIN / "python"), "-c", code]
+def _python(code: str, ws: Path, run_dir: Path | None, timeout: int, args: list[str] | None = None) -> subprocess.CompletedProcess:
+    """Run python -c CODE (or python ARGS) in the workspace, sandboxed when run_dir is given."""
+    cmd = [str(BIN / "python"), *(args if args is not None else ["-c", code])]
     env = os.environ | {"PYTHONDONTWRITEBYTECODE": "1"}
     if run_dir is not None:
         cmd = [*sandbox.sandbox_prefix(run_dir), *cmd]
@@ -242,3 +243,31 @@ def summarize(results: list[SmokeResult], target: str) -> str:
     if not bad:
         return f"{target} starts cleanly ({'; '.join(r.case for r in results)})."
     return "\n".join(f"{target} crashes when {r.case}:\n{r.detail}" for r in bad)
+
+
+CHECKS_FILE = "checks.txt"
+TRY = ".lightness/kit/try_app.py"
+
+
+def checks(ws: Path, run_dir: Path | None = None, timeout: int = 180) -> dict[str, str | None] | None:
+    """Run the harness's own checks and the model's checks.txt through the try command:
+    {check name: None if it passed, else what it printed}. None if they could not run."""
+    if not (ws / TRY).exists():
+        return None
+    args = [TRY, "--builtin"] + (["--checks", CHECKS_FILE] if (ws / CHECKS_FILE).exists() else [])
+    proc = _python("", ws, run_dir, timeout, args)
+    results: dict[str, str | None] = {}
+    name = None
+    for line in proc.stdout.splitlines():
+        verdict, _, rest = line.partition(" ")
+        if verdict in ("PASS", "FAIL") and rest:
+            name = rest
+            results[name] = None if verdict == "PASS" else ""
+        elif name is not None and results[name] is not None and line.startswith("    "):
+            results[name] += line[4:] + "\n"
+    if proc.returncode == 124:
+        return {"the checks could not run": f"they did not finish within {timeout}s (a check that waits, or an app that hangs)"}
+    if not results and proc.returncode != 0:
+        detail = (proc.stdout + proc.stderr).strip().splitlines()[-1:] or ["no output"]
+        return {"the checks could not run": detail[0]}
+    return results

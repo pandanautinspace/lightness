@@ -412,7 +412,7 @@ try commands; none spent 8.1k on try commands and 1.5k on python snippets.
   had passed (notepad: the quit-with-unsaved-changes dialog; stopwatch: a crash when time moved,
   found by the harness's own check; bookmarks: add-then-restart and cancel edit). All 6 passed
   again later. A fourth report (lights-out) followed a rewrite of `checks.txt`, not of the app;
-  since `a6ac561`+1 such reports no longer count as regressions.
+  since `9d4f108` such reports no longer count as regressions.
 - **The one limit run was a loop bug**, not the arm: bookmarks sent
   `cd . && echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` 106 times and the loop only accepted the
   exact command. The same bug cost the Haiku 5.5 first arm loan-calc (131 such submits).

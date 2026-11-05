@@ -17,6 +17,15 @@ from lightness.bench import sandbox
 from lightness.provider import Client, ContextOverflow, Reply
 
 SUBMIT = "echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"
+SUBMIT_MARK = SUBMIT.split()[1]
+SUBMIT_HINT = f"[note] That was not a submit. To submit, run exactly `{SUBMIT}` as a command of its own."
+_CD_PREFIX = re.compile(r"^(?:cd\s+\S+\s*&&\s*)+")
+
+
+def is_submit(command: str) -> bool:
+    """The submit command, also with leading `cd DIR &&` and the marker in quotes."""
+    rest = _CD_PREFIX.sub("", command.strip())
+    return rest in (SUBMIT, f'echo "{SUBMIT_MARK}"', f"echo '{SUBMIT_MARK}'")
 
 SYSTEM = "You are a helpful assistant that can interact with a computer."
 
@@ -321,7 +330,7 @@ class TranscriptAgent:
                 continue
             for call in calls:
                 command = _command(call)
-                if command.strip() == SUBMIT:
+                if is_submit(command):
                     refusal = next((x for m in self.middleware if (x := m.on_submit(ctx))), None)
                     if refusal is None:
                         ctx.messages.append(self._tool(call, "Submitted."))
@@ -333,6 +342,8 @@ class TranscriptAgent:
                     m.before_command(ctx, command)
                 output = self.runner(command, ctx)
                 notes = [x for m in self.middleware if (x := m.after_command(ctx, command, output))]
+                if SUBMIT_MARK in command:
+                    notes.append(SUBMIT_HINT)
                 ctx.messages.append(self._tool(call, observation(output) + "".join("\n\n" + n for n in notes)))
 
     def _end(self, ctx: Ctx, status: str, submitted: bool) -> Result:

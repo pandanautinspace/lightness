@@ -323,3 +323,15 @@ def test_bench_labels_the_testing_arm():
     assert MiddlewareAgent("haiku", ["kit"]).step_limit == 150
     with pytest.raises(ValueError):
         MiddlewareAgent("haiku", ["env"], tests="first")
+
+
+def test_submit_accepts_a_cd_prefix_and_explains_near_misses(ws):
+    from lightness.agent.loop import SUBMIT_HINT, is_submit
+
+    assert is_submit(SUBMIT) and is_submit("cd . && " + SUBMIT) and is_submit("cd /x && cd y && " + SUBMIT)
+    assert is_submit('echo "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"')
+    assert not is_submit("python app.py && " + SUBMIT) and not is_submit(SUBMIT + " now")
+    a, client = agent(ws, [SUBMIT + " now", "cd . && " + SUBMIT, "echo never"])
+    res = a.run("submit")
+    assert res.submitted and res.steps == 2
+    assert tool_outputs(client)[0].endswith(SUBMIT_HINT)

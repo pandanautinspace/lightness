@@ -382,3 +382,42 @@ does the test work:
 
 Other arms are unchanged except that the try command's `advance` now waits only for the app's
 own timers (not Textual's, e.g. the Input cursor blink), which makes `advance` faster.
+
+#### Screen: none vs checks on Haiku 5.5 (9 tasks × 1 run), 2026-11-04
+
+Code at `c68dafc`, `--model haiku55`, one run per task per arm. Batches:
+`runs/kit-tui-20261104-202430-mw-env.guard.kit-tests.{none,checks}-haiku55-*`.
+
+| metric (mean over 9 runs) | none | checks |
+|---|---|---|
+| hidden spec tests passed, % | 98.9 | 98.9 |
+| hidden intent tests passed, % | 30.8 | 30.8 |
+| output tokens per run | 15252 | 10215 |
+| agent wall time per run, s | 521 | 284 |
+| steps per run | 79 | 31 |
+| runs that hit the step limit | 3 | 1 |
+| regressions the harness checks reported, after an app change / passing again later | – | 6 / 6 |
+| cost for the 9 runs | $0.38 | $0.19 |
+
+Output tokens by kind: checks spent 2.7k per run writing and editing `checks.txt` and 0.9k on
+try commands; none spent 8.1k on try commands and 1.5k on python snippets.
+
+**Findings**
+
+- **Same scores, about half the time and cost.** Every task scored the same spec tests in both
+  arms; intent tests moved by one on two tasks each way. Wall time fell even on runs that
+  submitted (median 181 s vs 469 s): instead of trying the app by hand step after step, the
+  model wrote its checks once and let the harness run them.
+- **The first regressions caught in any arm.** In 3 of 9 runs an app rewrite broke checks that
+  had passed (notepad: the quit-with-unsaved-changes dialog; stopwatch: a crash when time moved,
+  found by the harness's own check; bookmarks: add-then-restart and cancel edit). All 6 passed
+  again later. A fourth report (lights-out) followed a rewrite of `checks.txt`, not of the app;
+  since `a6ac561`+1 such reports no longer count as regressions.
+- **The one limit run was a loop bug**, not the arm: bookmarks sent
+  `cd . && echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` 106 times and the loop only accepted the
+  exact command. The same bug cost the Haiku 5.5 first arm loan-calc (131 such submits).
+  Fixed in `a6ac561`: a leading `cd DIR &&` is accepted, and other commands containing the
+  marker get a note saying how to submit. none's three limit runs were not this bug.
+- No submit was refused: every run's checks passed by the time it submitted.
+
+Next: the same screen on the local 35B (the reason for this arm), then 3 runs per task if it holds.

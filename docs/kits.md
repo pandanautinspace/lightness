@@ -348,9 +348,12 @@ code at `13a5b7d`. Tasks: json-viewer, loan-calc, stopwatch and airport-lookup. 
 
 - **Scores are identical.** Both arms fail exactly the same hidden tests on every task
   (stopwatch: minutes format and pause/resume; json-viewer: all three intent tests).
-- **first was cheaper and steadier here:** 30% less wall time, 30% fewer steps, and both runs
-  that none failed to submit (context overflow, wall limit) finished under first. With one run
-  per task this may be noise; on Haiku 5.5 first hit limits more often, not less.
+- **first never blew up; otherwise it was slower.** Its lower mean wall time (555 s vs 799 s)
+  comes entirely from the two runs none failed to submit (json-viewer context overflow at
+  840 s, stopwatch wall limit at 1886 s). On the two tasks both arms submitted, first took
+  about 2.7× as long (loan-calc 730 s vs 263 s, airport-lookup 686 s vs 269 s), mostly writing
+  tests. With one run per task, the blow-ups may be noise; on Haiku 5.5 first hit limits more
+  often, not less.
 - The 35B matches Haiku 5.5 on spec tests for these tasks (95% vs 90% for Haiku 5.5 none on the
   same 4 tasks), but is far behind on intent tests (8% vs 47%).
 - The "calls ≥ 60 s" row is left out: on the local server long calls are slow generation, not

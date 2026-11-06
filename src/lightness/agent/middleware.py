@@ -206,7 +206,7 @@ TESTS_AFTER = ("Not submitted yet. Before submitting: write tests for the task's
 CHECKS_REFUSED = ("Not submitted yet: some checks fail. Fix the app, or a check in checks.txt that disagrees with "
                   "the task, then submit again.")
 CHECKS_MISSING = ("No checks.txt yet, so nothing checks the task's contract. Write the contract as checks in "
-                  "checks.txt now (see Checks), before changing the app again.")
+                  "checks.txt now (see Checks), before writing more of the app.")
 CHECKS_ALL_PASS = "If checks.txt covers every item of the task's contract, submit now; otherwise add the missing checks."
 CHECKS_SHOWN, CHECK_LINES = 4, 15  # failing checks shown in full, and lines of each
 

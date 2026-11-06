@@ -340,7 +340,7 @@ def css_error_text(exc) -> str:
             continue
         if t.startswith("\u2502"):  # a code line inside the panel: keep only the marked one
             if "\u2771" in t:
-                out.append("  at CSS line: " + t.strip("\u2502 ").replace("\u2771", "").strip())
+                out.append("  at CSS line: " + " ".join(t.replace("\u2502", " ").replace("\u2771", " ").split()))
             continue
         out.append("  " + t)
     return "CSS error in the app's CSS:\n" + "\n".join(out[:24])

@@ -9,6 +9,10 @@
 - `Input.Submitted` has `.input`, `.value`, `.validation_result`; handler
   `on_input_submitted(self, event)`. Clear with `event.input.value = ""`. Scope with
   `@on(Input.Submitted, "#id")`.
+- Tabs: build them in `compose()` with `with TabbedContent(id="tabs"):` and, inside,
+  `with TabPane("People", id="people"):` then `yield` that tab's widgets. Don't pass TabPane
+  objects to `TabbedContent(...)` (its arguments are titles) and don't mount into a TabPane from
+  `on_mount` (`MountError`). Switch tabs with `self.query_one("#tabs", TabbedContent).active = "people"`.
 - `Select(options, prompt="Payer", id=...)`: `options` (a list of `(label, value)`) is required, possibly
   `[]`; there is no `placeholder=`. Options that change: `select.set_options([...])`, then set
   `select.value` to one of them (any other value raises `InvalidSelectValueError`; `set_options`

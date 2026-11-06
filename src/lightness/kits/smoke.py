@@ -43,7 +43,7 @@ print("SMOKE-OK")
 """
 
 
-CSS_FUNC = 'def css_error_text(exc) -> str:\n    """A Textual StylesheetParseError as plain lines: each bad CSS line and what is wrong with it."""\n    import io\n    from rich.console import Console\n    buf = io.StringIO()\n    Console(file=buf, width=100, no_color=True, color_system=None).print(exc.errors)\n    out = []\n    for line in buf.getvalue().splitlines():\n        t = line.strip()\n        if not t or t[0] in "\\u256d\\u2570":  # panel top/bottom borders\n            continue\n        if t.startswith("\\u2502"):  # a code line inside the panel: keep only the marked one\n            if "\\u2771" in t:\n                out.append("  at CSS line: " + t.strip("\\u2502 ").replace("\\u2771", "").strip())\n            continue\n        out.append("  " + t)\n    return "CSS error in the app\'s CSS:\\n" + "\\n".join(out[:24])\n'
+CSS_FUNC = 'def css_error_text(exc) -> str:\n    """A Textual StylesheetParseError as plain lines: each bad CSS line and what is wrong with it."""\n    import io\n    from rich.console import Console\n    buf = io.StringIO()\n    Console(file=buf, width=100, no_color=True, color_system=None).print(exc.errors)\n    out = []\n    for line in buf.getvalue().splitlines():\n        t = line.strip()\n        if not t or t[0] in "\\u256d\\u2570":  # panel top/bottom borders\n            continue\n        if t.startswith("\\u2502"):  # a code line inside the panel: keep only the marked one\n            if "\\u2771" in t:\n                out.append("  at CSS line: " + " ".join(t.replace("\\u2502", " ").replace("\\u2771", " ").split()))\n            continue\n        out.append("  " + t)\n    return "CSS error in the app\'s CSS:\\n" + "\\n".join(out[:24])\n'
 
 
 @dataclass

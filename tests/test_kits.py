@@ -785,7 +785,7 @@ def test_expect_failures_explain_case_and_selectors():
 
     state = {"w": ["#moves: 'Moves: 0'"]}
     assert "different case: 'Moves: 0'" in expectation("expect", "moves: 0", state, {})
-    assert "not a selector" in expectation("expect", "#cell-0-1.cursor", state, {})
+    assert "not a CSS selector" in expectation("expect", "#cell-0-1.cursor", state, {})
     assert expectation("expect", "Moves: 0", state, {}) is None
 
 
@@ -841,13 +841,13 @@ def test_check_lines_are_linted_before_running(tmp_path):
     (tmp_path / "both.py").write_text(TWO_FILES)
     (tmp_path / "places.csv").write_text("ams\n")
     (tmp_path / "checks.txt").write_text(
-        'bad: type:two words press:#save expect:#id expect:""\ngood: press:a\n')
+        'bad: type:two words press:#save expect:.on expect:""\ngood: press:a\n')
     names = {"module": "both", "app_class": "Both",
              "params": params("places_path:input:places.csv", "saved_path:data:saved.json")}
     out = try_app(tmp_path, names, "--checks", "checks.txt")
     assert "FAIL bad\n    not run: 'words' is not a step" in out
     assert "press takes key names; to press a button, click:#save" in out
-    assert "expect matches text on the screen, not a selector" in out and "has no text to look for" in out
+    assert "expect matches text on the screen, not a CSS selector" in out and "has no text to look for" in out
     assert "PASS good" in out
 
 

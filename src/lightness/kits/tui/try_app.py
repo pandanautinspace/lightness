@@ -336,8 +336,8 @@ def expectation(action: str, value: str, state: dict[str, list[str]], data_files
         if want.lower() in screen.lower():
             i = screen.lower().index(want.lower())
             return f"not on the screen (only with different case: {screen[i:i + len(want)]!r})"
-        if re.match(r"^[#.][\w-]", want):
-            return ("not on the screen: expect: matches text the screen shows, not a selector; use the text "
+        if SELECTOR.match(want):
+            return ("not on the screen: expect: matches text the screen shows, not a CSS selector; use the text "
                     "that widget shows, as the screen dump below prints it")
         return "not on the screen"
     return "it is on the screen" if found else None
@@ -593,6 +593,8 @@ BAD_NAME = re.compile(r"^(--|(type|press|click|focus|wait|advance|restart|expect
 
 
 NAMES: set[str] = set()
+# a class or compound selector (.on, #cell-1.cursor, #a > b); a bare #id is fine: the dump prints "#id ..."
+SELECTOR = re.compile(r"^(\.[\w-]|#[\w-]+[.:\[> ])")
 STEP_NAMES = ("type", "press", "click", "focus", "wait", "advance", "expect", "expect-not", "expect-file")
 OPTIONS = ("--file", "--file-text", "--kw", "--data", "--data-from")
 
@@ -636,8 +638,9 @@ def lint(tokens: list[str], files: list[str] | None = None) -> list[str]:
             action, value = tok.split(":", 1)
             if action in ("expect", "expect-not") and not value.strip():
                 problems.append(f"{tok!r} has no text to look for")
-            elif action in ("expect", "expect-not") and re.match(r"^[#.][\w-]", value):
-                problems.append(f"{tok!r}: expect matches text on the screen, not a selector")
+            elif action in ("expect", "expect-not") and SELECTOR.match(value):
+                problems.append(f"{tok!r}: expect matches text on the screen, not a CSS selector (a bare #id "
+                                "works: the screen lists each shown widget as #id ...)")
             elif action == "expect-file" and files is not None and value.split("=", 1)[0] not in files:
                 problems.append(f"{tok[:40]!r}: expect-file takes a file parameter's name, not a file name "
                                 f"(they are: {', '.join(files) or 'none'})")

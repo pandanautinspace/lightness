@@ -46,6 +46,8 @@ class Caps:
     max_output: int = 0
     # Send tool_choice="required" with tools, so every reply is a tool call.
     tool_required: bool = False
+    # Request field for the output limit (OpenAI's own API wants max_completion_tokens for GPT-5).
+    max_tokens_field: str = "max_tokens"
 
 
 @dataclass
@@ -129,6 +131,8 @@ class Client:
             # Thinking cut short by the budget spills into the answer; leave room for it.
             body["max_tokens"] = self._clamp(max_tokens + int(thinking))
 
+        if self.caps.max_tokens_field != "max_tokens":
+            body[self.caps.max_tokens_field] = body.pop("max_tokens")
         start = time.time()
         resp = self._post(body)
         latency = time.time() - start

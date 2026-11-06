@@ -77,3 +77,38 @@ env_file = ".env.parley"
 context = 65536
 mode = "strict"
 caps = { json_schema = true, thinking_toggle = false, thinking_budget_field = "", tool_required = true }  # probed 2026-11-04; Parley reports no cache usage
+
+# OpenAI direct (key in the git-ignored .env.openai). Automatic prompt caching; GPT-5 models always
+# reason (hidden, billed as output); reasoning_effort is honored here, unlike on Parley.
+[oa-nano]
+base_url = "https://api.openai.com/v1"
+timeout = 120
+model = "gpt-5-nano"
+api_key_env = "OPENAI_API_KEY"
+env_file = ".env.openai"
+context = 65536
+mode = "strict"
+sampling = { reasoning_effort = "low" }
+caps = { json_schema = true, thinking_toggle = false, thinking_budget_field = "", reasoning_reserve = 8000, tool_required = true, max_tokens_field = "max_completion_tokens" }
+
+[oa-nano54]
+base_url = "https://api.openai.com/v1"
+timeout = 120
+model = "gpt-5.4-nano"
+api_key_env = "OPENAI_API_KEY"
+env_file = ".env.openai"
+context = 65536
+mode = "strict"
+sampling = { reasoning_effort = "none" }  # chat completions: tools need "none" on 5.4
+caps = { json_schema = true, thinking_toggle = false, thinking_budget_field = "", reasoning_reserve = 8000, tool_required = true, max_tokens_field = "max_completion_tokens" }
+
+[oa-mini54]
+base_url = "https://api.openai.com/v1"
+timeout = 120
+model = "gpt-5.4-mini"
+api_key_env = "OPENAI_API_KEY"
+env_file = ".env.openai"
+context = 65536
+mode = "strict"
+sampling = { reasoning_effort = "none" }  # chat completions: tools need "none" on 5.4
+caps = { json_schema = true, thinking_toggle = false, thinking_budget_field = "", reasoning_reserve = 8000, tool_required = true, max_tokens_field = "max_completion_tokens" }

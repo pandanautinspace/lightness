@@ -218,10 +218,11 @@ def checks_example(names: dict) -> str:
                   f"    kept after restart: --file-text {data}='[{{\"name\": \"milk\"}}]' restart expect:\"milk\""]
     if given:
         lines += ([""] if lines else []) + [
-            f"Example, for an app whose input file parameter is `{given}` (each check starts with a copy of the "
-            f"project's {default_file(next(p for p in files if p['name'] == given))} if there is one; give the "
-            "input each check needs with --file-text):", "",
-            f"    shows the first record: --file-text {given}='...' expect:\"...\"",
+            f"Example, for an app whose input file parameter is `{given}`. Each check starts with a copy of the "
+            f"project's {default_file(next(p for p in files if p['name'] == given))} if there is one, so most "
+            "checks need no file option. Give other contents with --file-text, on one line (write a line break "
+            "as \\n):", "",
+            f"    finds a record from the project's file: type:... expect:\"...\"",
             f"    bad input: --file-text {given}='not valid' expect:\"error\""]
     if not lines:
         lines = ["Example:", "", '    add an item: focus:#name type:milk press:enter expect:"milk"']

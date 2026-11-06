@@ -515,6 +515,8 @@ def test_try_app_data_param_starts_from_the_projects_file(tmp_path):
     assert "saved_path: no file yet" in out
     out = try_app(tmp_path, names, "--empty")
     assert "places_path: no file yet" in out
+    out = try_app(tmp_path, names, "--file-text", r"places_path=osl\nrom")  # one-line text: \n is a line break
+    assert "#places: 'osl rom'" in out
 
 
 def test_try_app_gives_an_input_only_app_its_file(tmp_path):

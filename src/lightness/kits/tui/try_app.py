@@ -430,7 +430,10 @@ def prepare(config: dict, a, tmp: Path):
         path = tmp / f["name"] / default
         path.parent.mkdir(parents=True)
         if f["name"] in texts:
-            path.write_text(texts[f["name"]])
+            text = texts[f["name"]]
+            if path.suffix != ".json" and "\n" not in text:  # one-line text for a CSV/text file:
+                text = text.replace("\\n", "\n").replace("\\t", "\t")  # \n and \t mean line break, tab
+            path.write_text(text)
         elif f["name"] in copies:
             shutil.copy(copies[f["name"]], path)
         elif Path(default).is_file() and (f["role"] == "input" or not a.empty):

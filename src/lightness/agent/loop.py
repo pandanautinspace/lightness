@@ -347,7 +347,7 @@ class TranscriptAgent:
                 ctx.messages.append(self._tool(call, observation(output) + "".join("\n\n" + n for n in notes)))
                 with (self.run_dir / "steps.jsonl").open("a") as f:  # live view of a run (watch_run.py)
                     f.write(json.dumps({"step": ctx.step, "t": round(time.time() - start), "command": command,
-                                        "output": ctx.messages[-1]["content"][-1500:]}) + "\n")
+                                        "output": _ends(ctx.messages[-1]["content"])}) + "\n")
 
     def _end(self, ctx: Ctx, status: str, submitted: bool) -> Result:
         (self.run_dir / "messages.json").write_text(json.dumps(ctx.messages, indent=1))
@@ -371,3 +371,8 @@ def _command(call: dict) -> str:
         return str(json.loads(call["function"].get("arguments") or "{}").get("command", ""))
     except json.JSONDecodeError:
         return ""
+
+
+def _ends(text: str, head: int = 600, tail: int = 900) -> str:
+    """Both ends of a long output (the checks summary is at the start, failures at the end)."""
+    return text if len(text) <= head + tail else text[:head] + "\n…\n" + text[-tail:]

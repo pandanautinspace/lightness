@@ -11,6 +11,9 @@
   `@on(Input.Submitted, "#id")`.
 - CSS classes: `widget.add_class("x")`, `widget.remove_class("x")`, `widget.set_class(flag, "x")`
   (on when flag is true). `widget.classes` is a read-only frozenset: no `.add`/`.discard`.
+- Mouse clicks: `from textual import events`, then `def on_click(self, event: events.Click)` on the
+  App (or the widget); `event.widget` is the widget clicked (e.g. `event.widget.id == "cell-1-2"`).
+  There is no `Static.Click`.
 - Tabs: build them in `compose()` with `with TabbedContent(id="tabs"):` and, inside,
   `with TabPane("People", id="people"):` then `yield` that tab's widgets. Don't pass TabPane
   objects to `TabbedContent(...)` (its arguments are titles) and don't mount into a TabPane from

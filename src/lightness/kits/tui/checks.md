@@ -2,9 +2,18 @@
 
 Your first file is `checks.txt` (it doesn't exist yet: create it before any app code). It holds the
 task's contract as checks. After every change the harness runs each one in a fresh app and tells
-you which fail, and which passed before and fail now. One check per line:
+you which fail, and which passed before and fail now.
+
+Each line is one whole check: a short name, a colon, then everything that check does (its file or
+App options, its steps and its expects) on that same line:
 
     NAME: [--file-text PARAM=TEXT ...] [--kw NAME=VALUE ...] STEP ...
+
+    counter starts at zero: expect:"count: 0"
+    plus adds one: press:plus expect:"count: 1"
+    plus twice from 5: --kw start=5 press:plus,plus expect:"count: 7"
+
+Not a script spread over lines: a line without `NAME:` in front, or with only an option, is an error.
 
 `--kw NAME=VALUE` passes an App argument that isn't a file, as a Python literal: `--kw seed=1`,
 `--kw "size=3"`, `--kw "items=['a', 'b']"` (quote a value with spaces or brackets).
@@ -15,6 +24,10 @@ plus three that check what is there at that point:
 - `expect:TEXT`: TEXT is on the screen, as the try command prints it (a row, a label, a notification).
 - `expect-not:TEXT`: TEXT is not on the screen.
 - `expect-file:PARAM=TEXT`: the data file PARAM holds exactly TEXT (JSON is compared as values).
+
+A grid is printed row by row, each cell as its text (or its own classes when it has none), then a
+line for a class only one or two cells have, e.g. `class cursor: #cell-1-2 (row 1, col 2)`. Check a
+row by its whole printed text, e.g. `expect:". # # . ."`, and the cursor by that class line.
 
 Quote a step that has spaces: `expect:"total: 3"`. Lines starting with `#` are comments.
 

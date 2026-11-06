@@ -778,3 +778,12 @@ def test_checks_file_rejects_steps_written_as_the_name(tmp_path):
     out = try_app(tmp_path, names, "--checks", "checks.txt")
     assert out.count("not a check:") == 2 and "typing marks it modified: type:hello" in out
     assert "FAIL line 1\n" in out and "FAIL line 2\n" in out and "line 3" not in out  # a real check runs
+
+
+def test_expect_failures_explain_case_and_selectors():
+    from lightness.kits.tui.try_app import expectation
+
+    state = {"w": ["#moves: 'Moves: 0'"]}
+    assert "different case: 'Moves: 0'" in expectation("expect", "moves: 0", state, {})
+    assert "not a selector" in expectation("expect", "#cell-0-1.cursor", state, {})
+    assert expectation("expect", "Moves: 0", state, {}) is None

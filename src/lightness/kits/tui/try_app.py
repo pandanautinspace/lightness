@@ -310,9 +310,18 @@ def expectation(action: str, value: str, state: dict[str, list[str]], data_files
         except ValueError:
             same = got.strip() == want.strip()
         return None if same else f"the file holds {file_text(path)}"
-    found = " ".join(value.split()) in screen_text(state)
+    want, screen = " ".join(value.split()), screen_text(state)
+    found = want in screen
     if action == "expect":
-        return None if found else "not on the screen"
+        if found:
+            return None
+        if want.lower() in screen.lower():
+            i = screen.lower().index(want.lower())
+            return f"not on the screen (only with different case: {screen[i:i + len(want)]!r})"
+        if re.match(r"^[#.][\w-]", want):
+            return ("not on the screen: expect: matches text the screen shows, not a selector; use the text "
+                    "that widget shows, as the screen dump below prints it")
+        return "not on the screen"
     return "it is on the screen" if found else None
 
 

@@ -290,23 +290,29 @@ def show(state: dict[str, list[str]]) -> None:
             say("  " + line)
 
 
+CURSOR_LINE = re.compile(r" (tree|list|table)\b")  # the first line of a tree/list/table block
+
+
 def show_changes(before: dict[str, list[str]], after: dict[str, list[str]], files_changed: bool = False) -> None:
     if before.get("screen") != after.get("screen"):
         say(f"  (now on {after['screen'][0][8:] if 'screen' in after else 'the main screen'})")
         show(after)
         return
-    changed = False
+    changed = []
     for key, lines in after.items():
         if before.get(key) != lines:
-            changed = True
+            changed.append(key)
             for line in lines:
                 say("  " + line)
     for key in before:
         if key not in after:
-            changed = True
+            changed.append(key)
             say(f"  {key}: (no longer shown)")
     if not changed and not files_changed:
         say("  (nothing changed)")
+    elif len(changed) == 1 and not files_changed and CURSOR_LINE.search(" ".join(after.get(changed[0], [""])[:1])):
+        # only a list/table/tree cursor moved: say so plainly, the app may be meant to react to it
+        say(f"  (only the cursor in {changed[0]} moved; no other widget changed)")
 
 
 def screen_text(state: dict[str, list[str]]) -> str:

@@ -973,3 +973,13 @@ def test_lint_accepts_lines_copied_from_the_dump():
 
     assert lint(shlex.split("""expect:"#path: '$'" expect:"#detail:" expect:#bm-title""")) == []
     assert all(lint([t]) for t in ["expect:#c.on", "expect:#a:focus", "expect:#a > b"])
+
+
+def test_try_app_says_when_only_the_cursor_moved(tmp_path):
+    (tmp_path / "t.py").write_text(
+        "from textual.app import App\nfrom textual.widgets import Static, Tree\n\n\nclass T(App):\n"
+        "    def compose(self):\n        yield Tree('root', id='tree')\n        yield Static('$', id='path')\n\n"
+        "    def on_mount(self):\n        t = self.query_one(Tree)\n        t.root.add_leaf('a')\n        t.root.expand()\n"
+        "        t.focus()\n")
+    out = try_app(tmp_path, {"module": "t", "app_class": "T", "params": []}, "press:down")
+    assert "(only the cursor in #tree moved; no other widget changed)" in out

@@ -325,7 +325,29 @@ def expectation(action: str, value: str, state: dict[str, list[str]], data_files
     return "it is on the screen" if found else None
 
 
+def css_error_text(exc) -> str:
+    """A Textual StylesheetParseError as plain lines: each bad CSS line and what is wrong with it."""
+    import io
+    from rich.console import Console
+    buf = io.StringIO()
+    Console(file=buf, width=100, no_color=True, color_system=None).print(exc.errors)
+    out = []
+    for line in buf.getvalue().splitlines():
+        t = line.strip()
+        if not t or t[0] in "\u256d\u2570":  # panel top/bottom borders
+            continue
+        if t.startswith("\u2502"):  # a code line inside the panel: keep only the marked one
+            if "\u2771" in t:
+                out.append("  at CSS line: " + t.strip("\u2502 ").replace("\u2771", "").strip())
+            continue
+        out.append("  " + t)
+    return "CSS error in the app's CSS:\n" + "\n".join(out[:24])
+
+
 def crash_text() -> str:
+    exc = sys.exc_info()[1]
+    if type(exc).__name__ == "StylesheetParseError":
+        return "\n".join("  " + line for line in css_error_text(exc).splitlines())
     lines = traceback.format_exc().strip().splitlines()
     ours = [i for i, line in enumerate(lines) if 'File "' in line and "site-packages" not in line and "try_app" not in line]
     keep = lines[ours[-1]:] if ours else lines[-3:]

@@ -33,9 +33,17 @@ async def main():
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause()
 
-asyncio.run(main())
+from textual.css.stylesheet import StylesheetParseError
+{css_func}
+try:
+    asyncio.run(main())
+except StylesheetParseError as e:
+    print("SMOKE: " + css_error_text(e)); sys.exit(3)
 print("SMOKE-OK")
 """
+
+
+CSS_FUNC = 'def css_error_text(exc) -> str:\n    """A Textual StylesheetParseError as plain lines: each bad CSS line and what is wrong with it."""\n    import io\n    from rich.console import Console\n    buf = io.StringIO()\n    Console(file=buf, width=100, no_color=True, color_system=None).print(exc.errors)\n    out = []\n    for line in buf.getvalue().splitlines():\n        t = line.strip()\n        if not t or t[0] in "\\u256d\\u2570":  # panel top/bottom borders\n            continue\n        if t.startswith("\\u2502"):  # a code line inside the panel: keep only the marked one\n            if "\\u2771" in t:\n                out.append("  at CSS line: " + t.strip("\\u2502 ").replace("\\u2771", "").strip())\n            continue\n        out.append("  " + t)\n    return "CSS error in the app\'s CSS:\\n" + "\\n".join(out[:24])\n'
 
 
 @dataclass
@@ -91,12 +99,12 @@ def tui(ws: Path, names: dict, run_dir: Path | None = None, timeout: int = 30) -
     for case, kwargs, content in cases:
         if content is not None:
             Path(kwargs[files[0]["name"]]).write_text(content)
-        proc = _python(TUI_SNIPPET.format(module=module, app_class=app_class, kwargs=kwargs), ws, run_dir, timeout)
+        proc = _python(TUI_SNIPPET.format(module=module, app_class=app_class, kwargs=kwargs, css_func=CSS_FUNC), ws, run_dir, timeout)
         out = proc.stdout + proc.stderr
         if proc.returncode == 0 and "SMOKE-OK" in proc.stdout:
             results.append(SmokeResult(True, case))
         else:
-            detail = out.strip().splitlines()[-1] if "SMOKE:" in out else traceback_summary(out, ws)
+            detail = proc.stdout[proc.stdout.index("SMOKE:") + 7:].strip() if "SMOKE:" in proc.stdout else traceback_summary(out, ws)
             if content:
                 detail += f"\n(file contents: {content[:300]})"
             results.append(SmokeResult(False, case, detail))

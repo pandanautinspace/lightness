@@ -787,3 +787,16 @@ def test_expect_failures_explain_case_and_selectors():
     assert "different case: 'Moves: 0'" in expectation("expect", "moves: 0", state, {})
     assert "not a selector" in expectation("expect", "#cell-0-1.cursor", state, {})
     assert expectation("expect", "Moves: 0", state, {}) is None
+
+
+def test_start_check_shows_css_errors_plainly(tmp_path):
+    from lightness.kits import smoke
+
+    (tmp_path / "bad.py").write_text(
+        "from textual.app import App\nfrom textual.widgets import Static\n\n\nclass Bad(App):\n"
+        "    CSS = \"#board { grid-size: 5 5; colr: red; }\"\n\n    def compose(self):\n"
+        "        yield Static('x', id='board')\n")
+    bad = [r for r in smoke.tui(tmp_path, {"module": "bad", "app_class": "Bad", "params": []}, None) if not r.ok]
+    text = smoke.summarize(bad, "bad.py")
+    assert "at CSS line: 1 #board { grid-size: 5 5; colr: red; }" in text
+    assert "Did you mean 'color'?" in text and "StylesheetErrors object" not in text and "╭" not in text

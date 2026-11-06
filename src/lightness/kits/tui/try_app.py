@@ -601,7 +601,8 @@ def file_checks(config: dict, cls, path: Path) -> list[tuple[str, str | None]]:
                 rc = 2
             finally:
                 OUT[0] = sys.stdout
-        lines = buf.getvalue().rstrip().splitlines()
+        # Textual's own boxed traceback (stderr) repeats the CRASH summary below it: leave it out
+        lines = [x for x in buf.getvalue().rstrip().splitlines() if not x.lstrip().startswith(("\u256d", "\u2502", "\u2570"))]
         out.append((name.strip(), None if rc == 0 else "\n".join(lines[-DETAIL:])))
     return out
 

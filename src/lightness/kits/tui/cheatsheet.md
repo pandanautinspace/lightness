@@ -19,7 +19,8 @@
   resets the value to `Select.NULL`, the empty value).
 - `Tree`: `tree.select_node(node)` posts `NodeSelected`, which toggles that node open/closed
   (so calling it on the root you just expanded collapses it). To move the cursor without
-  toggling, use `tree.move_cursor(node)`.
+  toggling, use `tree.move_cursor(node)`. Tree keys: `up`/`down` move through the visible rows,
+  `space` opens/closes a node, `enter` selects (and toggles); plain `left`/`right` do nothing.
 - `ListView`: `await lv.clear()`, `await lv.append(ListItem(Label(text)))`, `await lv.extend(...)`,
   `lv.index`, `lv.highlighted_child`; events `ListView.Selected` (enter) and `ListView.Highlighted`.
   After clear + extend, `index` is `None`: set it again.

@@ -207,6 +207,9 @@ CHECKS_REFUSED = ("Not submitted yet: some checks fail. Fix the app, or a check 
                   "the task, then submit again.")
 CHECKS_MISSING = ("No checks.txt yet, so nothing checks the task's contract. Write the contract as checks in "
                   "checks.txt now (see Checks), before writing more of the app.")
+CHECKS_FAIL_HINT = ("Each check started a fresh app: it sees nothing another check did. For each failure, decide "
+                    "first whether the check or the app disagrees with the task (the screen it shows is what the "
+                    "app does); fix that one, not both.")
 CHECKS_ALL_PASS = "If checks.txt covers every item of the task's contract, submit now; otherwise add the missing checks."
 CHECKS_SHOWN, CHECK_LINES = 4, 15  # failing checks shown in full, and lines of each
 
@@ -221,6 +224,8 @@ def checks_text(results: dict[str, str | None], regressions: list[str]) -> str:
         lines.append(f"Also failing: {', '.join(list(failing)[CHECKS_SHOWN:])}")
     if not failing:
         lines.append(CHECKS_ALL_PASS)
+    else:
+        lines.append(CHECKS_FAIL_HINT)
     return "\n".join(lines)
 
 

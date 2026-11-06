@@ -19,6 +19,7 @@ moves on advance:SECONDS.
 """
 
 import argparse
+from collections import Counter
 import ast
 import asyncio
 import contextlib
@@ -139,6 +140,11 @@ def grid(widget) -> list[str] | None:
     cols = widget.styles.grid_size_columns or 1
     width = max(len(t) for t in labels)
     lines = ["  " + " ".join(t.ljust(width) for t in labels[i:i + cols]).rstrip() for i in range(0, len(labels), cols)]
+    # a class only one or two cells have (a cursor, a selection) is lost when cells show text: list it
+    counts = Counter(c for cell in cells for c in set(cell.classes) - common)
+    for cls_name in sorted(k for k, n in counts.items() if n <= 2):
+        where = [f"{name(c)} (row {i // cols}, col {i % cols})" for i, c in enumerate(cells) if cls_name in c.classes]
+        lines.append(f"  class {cls_name}: {', '.join(where)}")
     return [f"{name(widget)} grid {cols} wide:"] + rows(lines)
 
 

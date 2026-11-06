@@ -849,3 +849,16 @@ def test_check_lines_are_linted_before_running(tmp_path):
     assert "press takes key names; to press a button, click:#save" in out
     assert "expect matches text on the screen, not a selector" in out and "has no text to look for" in out
     assert "PASS good" in out
+
+
+def test_try_app_grid_lists_a_class_only_one_cell_has(tmp_path):
+    (tmp_path / "g.py").write_text(
+        "from textual.app import App\nfrom textual.widgets import Static\n\n\nclass G(App):\n"
+        "    CSS = '#board { layout: grid; grid-size: 2; }'\n    BINDINGS = [('right', 'go')]\n\n"
+        "    def compose(self):\n        from textual.containers import Container\n"
+        "        with Container(id='board'):\n            for i in range(4):\n"
+        "                yield Static('#' if i % 2 else '.', id=f'c{i}', classes='cell cursor' if i == 0 else 'cell')\n\n"
+        "    def action_go(self):\n        self.query_one('#c0').remove_class('cursor')\n"
+        "        self.query_one('#c1').add_class('cursor')\n")
+    out = try_app(tmp_path, {"module": "g", "app_class": "G", "params": []}, "press:right", "expect:class cursor: #c1")
+    assert "class cursor: #c0 (row 0, col 0)" in out and "ok: expect:class cursor: #c1" in out

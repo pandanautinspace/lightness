@@ -4,7 +4,10 @@ Your first file is `checks.txt` (it doesn't exist yet: create it before any app 
 task's contract as checks. After every change the harness runs each one in a fresh app and tells
 you which fail, and which passed before and fail now. One check per line:
 
-    NAME: [--file-text PARAM=TEXT ...] STEP ...
+    NAME: [--file-text PARAM=TEXT ...] [--kw NAME=VALUE ...] STEP ...
+
+`--kw NAME=VALUE` passes an App argument that isn't a file, as a Python literal: `--kw seed=1`,
+`--kw "size=3"`, `--kw "items=['a', 'b']"` (quote a value with spaces or brackets).
 
 The steps are the try command's (`type:`, `press:`, `focus:`, `click:`, `advance:`, `restart`),
 plus three that check what is there at that point:

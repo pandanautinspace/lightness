@@ -9,6 +9,8 @@
 - `Input.Submitted` has `.input`, `.value`, `.validation_result`; handler
   `on_input_submitted(self, event)`. Clear with `event.input.value = ""`. Scope with
   `@on(Input.Submitted, "#id")`.
+- CSS classes: `widget.add_class("x")`, `widget.remove_class("x")`, `widget.set_class(flag, "x")`
+  (on when flag is true). `widget.classes` is a read-only frozenset: no `.add`/`.discard`.
 - Tabs: build them in `compose()` with `with TabbedContent(id="tabs"):` and, inside,
   `with TabPane("People", id="people"):` then `yield` that tab's widgets. Don't pass TabPane
   objects to `TabbedContent(...)` (its arguments are titles) and don't mount into a TabPane from

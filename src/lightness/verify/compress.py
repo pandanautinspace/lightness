@@ -17,7 +17,8 @@ def _rel(path: str, ws: Path) -> str | None:
     try:
         return str(Path(path).resolve().relative_to(ws.resolve()))
     except (ValueError, OSError):
-        return None if path.startswith("/") else path
+        # <frozen importlib...> and <string> (the harness's own snippet) are noise, not the app
+        return None if path.startswith(("/", "<")) else path
 
 
 def _cap(lines: list[str]) -> str:

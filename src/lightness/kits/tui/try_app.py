@@ -601,8 +601,9 @@ def valid_key(key: str, names: set[str]) -> bool:
     return len(key) == 1 or key in names
 
 
-def lint(tokens: list[str]) -> list[str]:
-    """Every mistake in one check's steps that can be seen without running it."""
+def lint(tokens: list[str], files: list[str] | None = None) -> list[str]:
+    """Every mistake in one check's steps that can be seen without running it (files: the App's file
+    parameter names, for --file/--file-text/expect-file)."""
     problems, i = [], 0
     global NAMES
     NAMES = NAMES or key_names()
@@ -610,6 +611,11 @@ def lint(tokens: list[str]) -> list[str]:
         tok = tokens[i]
         opt = tok.split("=", 1)[0]
         if opt in OPTIONS:
+            value = tok.split("=", 1)[1] if "=" in tok else (tokens[i + 1] if i + 1 < len(tokens) else "")
+            param = value.split("=", 1)[0]
+            if files is not None and opt in ("--file", "--file-text") and param not in files:
+                problems.append(f"{opt} {param}=...: {param!r} is not a file parameter of the App "
+                                f"(they are: {', '.join(files) or 'none'})")
             i += 1 if "=" in tok else 2
             continue
         if tok.startswith("-"):
@@ -624,6 +630,9 @@ def lint(tokens: list[str]) -> list[str]:
                 problems.append(f"{tok!r} has no text to look for")
             elif action in ("expect", "expect-not") and re.match(r"^[#.][\w-]", value):
                 problems.append(f"{tok!r}: expect matches text on the screen, not a selector")
+            elif action == "expect-file" and files is not None and value.split("=", 1)[0] not in files:
+                problems.append(f"{tok[:40]!r}: expect-file takes a file parameter's name, not a file name "
+                                f"(they are: {', '.join(files) or 'none'})")
             elif action == "press" and value.startswith("#"):
                 problems.append(f"{tok!r}: press takes key names; to press a button, click:{value}")
             elif action == "press" and (bad := [k for k in value.split(",") if k.strip() and not valid_key(k.strip(), NAMES)]):
@@ -653,7 +662,7 @@ def file_checks(config: dict, cls, path: Path) -> list[tuple[str, str | None]]:
                         "': ', then the steps, e.g.\n    typing marks it modified: type:hello expect:modified"))
             continue
         try:
-            problems = lint(shlex.split(rest))
+            problems = lint(shlex.split(rest), [p["name"] for p in config.get("params") or [] if p["role"] in FILE_ROLES])
         except ValueError as e:
             problems = [f"can't split the line into steps: {e}"]
         if problems:

@@ -11,6 +11,8 @@
   `@on(Input.Submitted, "#id")`.
 - CSS classes: `widget.add_class("x")`, `widget.remove_class("x")`, `widget.set_class(flag, "x")`
   (on when flag is true). `widget.classes` is a read-only frozenset: no `.add`/`.discard`.
+- Events have no `.node`. The widget that sent a message is `event.control` (any widget message:
+  `Input.Submitted`, `Button.Pressed`, `ListView.Selected`, ...); also `event.input`, `event.button`.
 - Mouse clicks: `from textual import events`, then `def on_click(self, event: events.Click)` on the
   App (or the widget); `event.widget` is the widget clicked (e.g. `event.widget.id == "cell-1-2"`).
   There is no `Static.Click`.

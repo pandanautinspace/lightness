@@ -903,3 +903,14 @@ def test_lint_rejects_unknown_keys_and_glued_steps():
     assert "'bm-save' is not a key" in " ".join(lint(shlex.split("press:bm-save")))
     assert "one step per word" in " ".join(lint(shlex.split("type:A,type:B")))
     assert lint(shlex.split('press:ctrl+s,enter press:comma press:shift+tab type:"a,b" press:down,space')) == []
+
+
+def test_lint_rejects_file_names_where_parameter_names_go():
+    import shlex
+
+    from lightness.kits.tui.try_app import lint
+
+    problems = " ".join(lint(shlex.split("--file-text trip.json='{}' expect-file:trip.json='{}'"), ["data_path"]))
+    assert "'trip.json' is not a file parameter of the App (they are: data_path)" in problems
+    assert "expect-file takes a file parameter's name" in problems
+    assert lint(shlex.split("--file-text data_path='{}' expect-file:data_path='{}'"), ["data_path"]) == []

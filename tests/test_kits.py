@@ -785,7 +785,8 @@ def test_expect_failures_explain_case_and_selectors():
 
     state = {"w": ["#moves: 'Moves: 0'"]}
     assert "different case: 'Moves: 0'" in expectation("expect", "moves: 0", state, {})
-    assert "not a CSS selector" in expectation("expect", "#cell-0-1.cursor", state, {})
+    assert "not selectors" in expectation("expect", "#cell-0-1.cursor", state, {})
+    assert expectation("expect", ".limits.burst", state, {}) == "not on the screen"  # a JSON path, not a class
     assert expectation("expect", "Moves: 0", state, {}) is None
 
 

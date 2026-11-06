@@ -342,8 +342,8 @@ def expectation(action: str, value: str, state: dict[str, list[str]], data_files
             i = screen.lower().index(want.lower())
             return f"not on the screen (only with different case: {screen[i:i + len(want)]!r})"
         if CLASS_LIKE.match(want):
-            return ("not on the screen: expect: matches text the screen shows, not a CSS selector; use the text "
-                    "that widget shows, as the screen dump below prints it")
+            return ("not on the screen (if you meant a CSS class or selector: expect matches the text the screen "
+                    "shows, as the dump below prints it, not selectors)")
         return "not on the screen"
     return "it is on the screen" if found else None
 
@@ -617,7 +617,7 @@ NAMES: set[str] = set()
 # prints "#id ..."), and so is ".word" (data often has it: "$.service", ".5"); if it is meant as a class,
 # the runtime failure says so (CLASS_LIKE).
 SELECTOR = re.compile(r"^#[\w-]+[.:\[> ]")
-CLASS_LIKE = re.compile(r"^(\.[\w-]|#[\w-]+[.:\[> ])")
+CLASS_LIKE = re.compile(r"^(\.[\w-]+$|#[\w-]+[.:\[> ])")  # one bare .class, or a compound selector
 STEP_NAMES = ("type", "press", "click", "focus", "wait", "advance", "expect", "expect-not", "expect-file")
 OPTIONS = ("--file", "--file-text", "--kw", "--data", "--data-from")
 

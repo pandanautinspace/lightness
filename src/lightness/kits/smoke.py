@@ -4,6 +4,7 @@ Only "starts and quits without an error" is checked here; what the program does 
 of tests and contract scenarios.
 """
 
+import re
 import ast
 import functools
 import importlib
@@ -228,6 +229,28 @@ def _own_names(cls: ast.ClassDef) -> list[tuple[str, str]]:
 
     walk(cls)
     return [(n, how) for n, how in dict.fromkeys(out) if n not in reactives]
+
+
+def undefined_names(ws: Path, names: dict) -> list[str]:
+    """Every name the app module uses but never defines or imports (ruff F821), in one line: a start
+    check finds them one crash at a time."""
+    import shutil
+    import sys as _sys
+
+    path = ws / f"{names['module']}.py"
+    ruff = shutil.which("ruff") or str(Path(_sys.executable).parent / "ruff")
+    if not path.exists() or not Path(ruff).exists():
+        return []
+    proc = subprocess.run([ruff, "check", "--select", "F821", "--output-format", "concise", "--no-cache",
+                           "--isolated", path.name], cwd=ws, capture_output=True, text=True, timeout=30)
+    found = re.findall(r":(\d+):\d+: F821 Undefined name `([^`]+)`", proc.stdout)
+    if not found:
+        return []
+    seen: dict[str, str] = {}
+    for line, name in found:
+        seen.setdefault(name, line)
+    listed = ", ".join(f"{n} (line {ln})" for n, ln in seen.items())
+    return [f"warning: {path.name} uses names it never imports or defines: {listed}. Import them all now."]
 
 
 def clashes(ws: Path, names: dict) -> list[str]:

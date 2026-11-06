@@ -115,7 +115,11 @@ def describe(widget) -> list[str]:
     if "Input" in bases:  # its classes too: validity is often a class (e.g. -invalid)
         classes = f" classes: {' '.join(sorted(widget.classes))}" if widget.classes else ""
         return [f"{name(widget)} input: {widget.value!r}{classes}"]
-    if "Select" in bases or "Checkbox" in bases or "Switch" in bases:
+    if "Select" in bases:  # its options too: a check may need to know what can be picked
+        labels = [plain(label) if not isinstance(label, str) else label
+                  for label, value in getattr(widget, "_options", []) if not type(value).__name__ == "NoSelection"]
+        return [f"{name(widget)} select: {widget.value!r}, options: {', '.join(labels) or '(none)'}"]
+    if "Checkbox" in bases or "Switch" in bases:
         return [f"{name(widget)} {kind.lower()}: {widget.value!r}"]
     if "RadioSet" in bases:
         pressed = widget.pressed_button

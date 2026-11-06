@@ -983,3 +983,22 @@ def test_try_app_says_when_only_the_cursor_moved(tmp_path):
         "        t.focus()\n")
     out = try_app(tmp_path, {"module": "t", "app_class": "T", "params": []}, "press:down")
     assert "(only the cursor in #tree moved; no other widget changed)" in out
+
+
+def test_undefined_names_listed_at_once(tmp_path):
+    from lightness.kits import smoke
+
+    (tmp_path / "m.py").write_text("from textual.app import App\n\n\nclass A(App):\n    @on(Input.Submitted)\n"
+                                   "    def f(self):\n        return Select([])\n")
+    warn = smoke.undefined_names(tmp_path, {"module": "m"})
+    assert warn and "on (line 5), Input (line 5), Select (line 7)" in warn[0]
+    (tmp_path / "ok.py").write_text("import os\nprint(os.sep)\n")
+    assert smoke.undefined_names(tmp_path, {"module": "ok"}) == []
+
+
+def test_try_app_select_line_lists_its_options(tmp_path):
+    (tmp_path / "s.py").write_text(
+        "from textual.app import App\nfrom textual.widgets import Select\n\n\nclass S(App):\n"
+        "    def compose(self):\n        yield Select([('Alice', 'a'), ('Bob', 'b')], prompt='Payer', id='payer')\n")
+    out = try_app(tmp_path, {"module": "s", "app_class": "S", "params": []}, "expect:Bob")
+    assert "#payer select: Select.NULL, options: Alice, Bob" in out and "ok: expect:Bob" in out

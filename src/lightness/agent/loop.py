@@ -347,7 +347,8 @@ class TranscriptAgent:
                 ctx.messages.append(self._tool(call, observation(output) + "".join("\n\n" + n for n in notes)))
                 with (self.run_dir / "steps.jsonl").open("a") as f:  # live view of a run (watch_run.py)
                     f.write(json.dumps({"step": ctx.step, "t": round(time.time() - start), "command": command,
-                                        "output": _ends(ctx.messages[-1]["content"])}) + "\n")
+                                        "output": _ends(ctx.messages[-1]["content"]),
+                                        "notes": [n.splitlines()[0][:200] for n in notes]}) + "\n")
 
     def _end(self, ctx: Ctx, status: str, submitted: bool) -> Result:
         (self.run_dir / "messages.json").write_text(json.dumps(ctx.messages, indent=1))

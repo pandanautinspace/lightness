@@ -46,7 +46,8 @@ def main(arg: str) -> None:
             for line in lines[seen:]:
                 s = json.loads(line)
                 cmd = " ".join(s["command"].split())[:110]
-                print(f"[{run.parent.name} {s['step']:>3} {s['t']:>4}s] {cmd}  => {summary(s['output'])}", flush=True)
+                text = s["output"] + "\n" + "\n".join(s.get("notes", []))
+                print(f"[{run.parent.name} {s['step']:>3} {s['t']:>4}s] {cmd}  => {summary(text)}", flush=True)
             seen = len(lines)
         if (run / "messages.json").exists():
             print(f"[{run.parent.name}] RUN ENDED after {seen} steps", flush=True)

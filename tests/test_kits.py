@@ -872,3 +872,13 @@ def test_try_app_tabs_line_names_how_to_switch(tmp_path):
         "            with TabPane('Two', id='two'):\n                yield Static('second', id='b')\n")
     out = try_app(tmp_path, {"module": "t", "app_class": "T", "params": []}, "click:#--content-tab-two", "expect:second")
     assert "#tabs tabs, active='one'; switch: click:#--content-tab-two" in out and "ok: expect:second" in out
+
+
+def test_a_failing_expect_only_check_says_it_saw_a_fresh_app(tmp_path):
+    (tmp_path / "both.py").write_text(TWO_FILES)
+    (tmp_path / "places.csv").write_text("ams\n")
+    (tmp_path / "checks.txt").write_text("after a: expect:\"nothing like this\"\n")
+    names = {"module": "both", "app_class": "Both",
+             "params": params("places_path:input:places.csv", "saved_path:data:saved.json")}
+    out = try_app(tmp_path, names, "--checks", "checks.txt")
+    assert "it looked at a freshly started app" in out

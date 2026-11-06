@@ -649,7 +649,12 @@ def file_checks(config: dict, cls, path: Path) -> list[tuple[str, str | None]]:
                 OUT[0] = sys.stdout
         # Textual's own boxed traceback (stderr) repeats the CRASH summary below it: leave it out
         lines = [x for x in buf.getvalue().rstrip().splitlines() if not x.lstrip().startswith(("\u256d", "\u2502", "\u2570"))]
-        out.append((name.strip(), None if rc == 0 else "\n".join(lines[-DETAIL:])))
+        detail = "\n".join(lines[-DETAIL:])
+        if rc != 0 and all(t.split(":", 1)[0] in ("expect", "expect-not", "expect-file") for t in shlex.split(rest)
+                           if not t.startswith("-")):
+            detail = ("(this check has no steps before its expects, so it looked at a freshly started app; "
+                      "it doesn't continue from the check above it)\n" + detail)
+        out.append((name.strip(), None if rc == 0 else detail))
     return out
 
 

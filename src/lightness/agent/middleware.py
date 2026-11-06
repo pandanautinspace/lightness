@@ -209,6 +209,9 @@ CHECKS_REFUSED = ("Not submitted yet: some checks fail. Fix the app, or a check 
                   "the task, then submit again.")
 CHECKS_MISSING = ("No checks.txt yet, so nothing checks the task's contract. Write the contract as checks in "
                   "checks.txt now (see Checks), before writing more of the app.")
+TRIES_NUDGE = ("[automatic checks] That's three try commands in a row with no change to the app or checks.txt. "
+               "What you are verifying by hand belongs in checks.txt (each line runs after every change); "
+               "otherwise change the app.")
 CHECKS_IDLE = ("[automatic checks] All {n} checks pass and the last {steps} steps changed nothing. If something "
                "the task asks for isn't covered, add it as a check in checks.txt; otherwise submit now.")
 CHECKS_FAIL_HINT = ("Each check started a fresh app: it sees nothing another check did. For each failure, decide "
@@ -334,7 +337,24 @@ class Kit(Middleware):
             notes.append(report)
         if self.tests == "checks" and (idle := self._idle_after_pass(ctx, sig)):
             notes.append(idle)
+        elif self.tests == "checks" and (tries := self._tries_in_a_row(ctx, command, sig)):
+            notes.append(tries)
         return shorten_paths("\n\n".join(notes), ctx.ws, ctx.run_dir) if notes else None
+
+    def _tries_in_a_row(self, ctx: Ctx, command: str, sig: str) -> str | None:
+        """Try commands in a row that change nothing while checks fail: after three, say what checks are for."""
+        from lightness.kits import smoke
+
+        checks_file = ctx.ws / smoke.CHECKS_FILE
+        state = (sig, checks_file.read_text() if checks_file.exists() else None)
+        if "try_app" not in command or "--checks" in command or state != ctx.data.get("kit.try_state"):
+            ctx.data["kit.try_state"], ctx.data["kit.tries"] = state, (1 if "try_app" in command else 0)
+            return None
+        ctx.data["kit.tries"] += 1
+        if ctx.data["kit.tries"] != 3:
+            return None
+        ctx.log("kit.tries_in_a_row", tries=3)
+        return TRIES_NUDGE
 
     def _idle_after_pass(self, ctx: Ctx, sig: str) -> str | None:
         """Steps that change nothing while every check passes: after two, say to submit or add a check."""

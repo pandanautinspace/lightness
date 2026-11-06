@@ -352,9 +352,13 @@ class Kit(Middleware):
                        and app_changed]
         ctx.log("kit.checks", passed=sum(v is None for v in now.values()),
                 failing=[n for n, v in now.items() if v is not None], regressions=regressions)
-        if now == prev:
+        checks_file = ctx.ws / smoke.CHECKS_FILE
+        text_now = checks_file.read_text() if checks_file.exists() else None
+        checks_changed = text_now != ctx.data.get("kit.checks_text")
+        ctx.data["kit.checks_text"] = text_now
+        if now == prev and not checks_changed:  # a rewritten checks.txt always gets a report
             return None
-        if not (ctx.ws / smoke.CHECKS_FILE).exists():
+        if not checks_file.exists():
             # the app changed but there is no checks.txt: only the harness's own checks ran
             failing = [n for n, v in now.items() if v is not None]
             return "[automatic checks] " + (checks_text(now, regressions) + "\n" if failing else "") + CHECKS_MISSING

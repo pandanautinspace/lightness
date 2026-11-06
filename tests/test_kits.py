@@ -800,3 +800,10 @@ def test_start_check_shows_css_errors_plainly(tmp_path):
     text = smoke.summarize(bad, "bad.py")
     assert "at CSS line: 1 #board { grid-size: 5 5; colr: red; }" in text
     assert "Did you mean 'color'?" in text and "StylesheetErrors object" not in text and "╭" not in text
+
+
+def test_empty_expect_is_an_error():
+    from lightness.kits.tui.try_app import expectation
+
+    assert "needs the text" in expectation("expect", "", {"w": ["x"]}, {})
+    assert "needs the text" in expectation("expect-not", "  ", {"w": ["x"]}, {})

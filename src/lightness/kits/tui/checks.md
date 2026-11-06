@@ -17,6 +17,10 @@ Quote a step that has spaces: `expect:"total: 3"`. Lines starting with `#` are c
 
 {example}
 
+Each check is independent: it starts a fresh app, with no records unless its own steps add them
+(or it gives a file), so a check never sees what another check did. A check that needs a record
+adds it first, in its own steps.
+
 Write one check per contract item: each key and what it does, the saved file's exact format,
 starting with no data file and with existing data, and wrong input. Take the expected values
 from the task. The harness already checks on its own that every key works without crashing (with

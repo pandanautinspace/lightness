@@ -311,6 +311,8 @@ def expectation(action: str, value: str, state: dict[str, list[str]], data_files
             same = got.strip() == want.strip()
         return None if same else f"the file holds {file_text(path)}"
     want, screen = " ".join(value.split()), screen_text(state)
+    if not want:
+        return f"{action}: needs the text to look for (an empty {action}: checks nothing)"
     found = want in screen
     if action == "expect":
         if found:

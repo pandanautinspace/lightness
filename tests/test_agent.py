@@ -352,3 +352,15 @@ def test_kit_checks_arm_asks_for_checks_when_the_app_changes_without_them(ws):
     TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("checks")], step_limit=4).run("a Textual notes app")
     outs = tool_outputs(client)
     assert mw.CHECKS_MISSING in outs[0]
+
+
+def test_kit_checks_arm_reports_after_a_checks_rewrite_with_the_same_results(ws):
+    checks = write("checks.txt", "empty: expect-not:\"notes\"\n")
+    same = write("checks.txt", "# the start\nempty: expect-not:\"notes\"\n")  # same results
+    run_dir = ws.parent
+    env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
+    client = KitClient([checks, same, SUBMIT, "echo never"], NOTES)
+    TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("checks")], step_limit=5).run("notes app")
+    outs = tool_outputs(client)
+    assert "[automatic checks] 1 of 1 checks pass." in outs[0]
+    assert "[automatic checks] 1 of 1 checks pass." in outs[1]  # rewritten, same results: still reported

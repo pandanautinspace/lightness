@@ -26,6 +26,8 @@ def summary(output: str) -> str:
         out.append("START-CRASH")
     if m := re.search(r"FAILED expect[^\n]{0,60}", output):
         out.append(m.group(0))
+    if "No checks.txt yet" in output:
+        out.append("NO-CHECKS-NUDGE")
     if "Not submitted" in output:
         out.append("SUBMIT-REFUSED")
     return " | ".join(out)

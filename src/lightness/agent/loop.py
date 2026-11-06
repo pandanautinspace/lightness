@@ -6,6 +6,7 @@ to remember or decide (workshop, automatic checks after writes, a submit gate, c
 """
 
 import json
+import os
 import platform
 import re
 import subprocess
@@ -26,6 +27,11 @@ def is_submit(command: str) -> bool:
     """The submit command, also with leading `cd DIR &&` and the marker in quotes."""
     rest = _CD_PREFIX.sub("", command.strip())
     return rest in (SUBMIT, f'echo "{SUBMIT_MARK}"', f"echo '{SUBMIT_MARK}'")
+
+# Thinking per agent step: True = the server's cap (llama-server --reasoning-budget), or a token budget
+# per request. Experiment knob (LIGHTNESS_THINK=4096): capped 8k-token thinks drafted whole apps
+# that were then cut off and thrown away.
+THINK: bool | int = int(os.environ["LIGHTNESS_THINK"]) if os.environ.get("LIGHTNESS_THINK") else True
 
 SYSTEM = "You are a helpful assistant that can interact with a computer."
 
@@ -305,7 +311,7 @@ class TranscriptAgent:
                 m.before_call(ctx)
             try:
                 for _ in range(5):  # an empty reply (e.g. a proxy's moderation block) is asked again
-                    reply = self.client.chat(ctx.messages, purpose="agent", thinking=True, max_tokens=16384,
+                    reply = self.client.chat(ctx.messages, purpose="agent", thinking=THINK, max_tokens=16384,
                                              tools=[BASH_TOOL])
                     if reply.tool_calls or reply.text.strip():
                         break

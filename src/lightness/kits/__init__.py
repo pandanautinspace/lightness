@@ -228,6 +228,15 @@ def checks_example(names: dict) -> str:
     data = next((p["name"] for p in files if p["role"] == "data"), None)
     given = next((p["name"] for p in files if p["role"] == "input"), None)
     lines = []
+    db = next((p for p in files if p["role"] == "data" and Path(default_file(p)).suffix in (".db", ".sqlite", ".sqlite3")), None)
+    if db:
+        name = db["name"]
+        lines += [f"Example, for an app whose data file parameter `{name}` is a SQLite database (each check starts "
+                  "with no database; it can't be given as text, so add records with steps, and restart to check "
+                  "they were kept):", "",
+                  "    add an item: focus:#name type:milk press:enter expect:\"milk\"",
+                  "    kept after restart: focus:#name type:milk press:enter restart expect:\"milk\""]
+        data = None
     if data:
         lines += [f"Example, for an app whose data file parameter is `{data}` (each check starts with a copy of "
                   "the project's file if there is one, else with none, unless it gives one):", "",

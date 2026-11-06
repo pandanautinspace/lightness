@@ -181,10 +181,35 @@ def snapshot(app) -> dict[str, list[str]]:
     return out
 
 
+SQLITE = (".db", ".sqlite", ".sqlite3")
+
+
+def sqlite_text(path: Path) -> str:
+    """A SQLite file's tables and rows, short."""
+    import sqlite3
+
+    try:
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            tables = [r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table' "
+                                                "AND name NOT LIKE 'sqlite_%' ORDER BY name")]
+            parts = []
+            for t in tables:
+                rows = con.execute(f'SELECT * FROM "{t}" LIMIT 6').fetchall()
+                parts.append(f"table {t}: " + (", ".join(map(repr, rows)) if rows else "(no rows)"))
+            return cut("SQLite: " + ("; ".join(parts) if parts else "no tables"))
+        finally:
+            con.close()
+    except sqlite3.Error as e:
+        return f"(SQLite file, unreadable: {e})"
+
+
 def file_text(path: Path) -> str:
     if not path.exists():
         return "(not created)"
     raw = path.read_bytes()
+    if raw.startswith(b"SQLite format 3"):
+        return sqlite_text(path)
     try:
         text = raw.decode()
     except UnicodeDecodeError:
@@ -275,6 +300,9 @@ def expectation(action: str, value: str, state: dict[str, list[str]], data_files
         path = data_files[param]
         if not path.exists():
             return "the file was not created"
+        if path.suffix in SQLITE:
+            return (f"{param} is a SQLite database, not text: check what the app shows instead (e.g. restart, then "
+                    f"expect:), it holds {file_text(path)}")
         got = path.read_text(errors="replace")
         try:
             same = json.loads(got) == json.loads(want)
@@ -338,7 +366,7 @@ async def run(cls, kw, data_files: dict[str, Path], clock: FakeClock | None, ste
                     elif action == "click":
                         await pilot.click(value)
                     elif action == "focus":
-                        app.query_one(value).focus()
+                        app.screen.query_one(value).focus()  # the active screen: a dialog's widgets too
                     elif action == "wait":
                         await asyncio.sleep(float(value))
                     elif action == "advance" and clock is None:
@@ -429,6 +457,10 @@ def prepare(config: dict, a, tmp: Path):
         default = f.get("file") or ("data.json" if f["role"] == "data" else "input.txt")
         path = tmp / f["name"] / default
         path.parent.mkdir(parents=True)
+        if f["name"] in texts and path.suffix in SQLITE:
+            say(f"{f['name']} is a SQLite database: --file-text can't fill it. Start without it and add records "
+                "with steps (then restart to check they were kept), or use --file NAME=PATH with a database file.")
+            return 2
         if f["name"] in texts:
             text = texts[f["name"]]
             if path.suffix != ".json" and "\n" not in text:  # one-line text for a CSV/text file:

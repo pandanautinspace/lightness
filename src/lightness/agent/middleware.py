@@ -47,7 +47,8 @@ class Workshop(Middleware):
 
 ENV_NOTES = """## Environment notes
 
-- The project is the current directory. Use relative paths; there is no /testbed, /app, /workspace or /root.
+- The project is the current directory: you start in it, and `ls` shows it. Use relative paths; there is
+  no /testbed, /app, /workspace or /root, and nothing to look at in /Users or your home directory.
 - Python 3.12 with textual, rich, typer, flask, httpx, pytest and the standard library is already installed.
   There is no pip and no network: never try to install anything.
 - /tmp is not writable. Put scratch files in the project directory or under $TMPDIR.

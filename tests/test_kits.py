@@ -717,3 +717,54 @@ def test_fill_input_files_uses_the_projects_data_file(tmp_path):
     assert fill_input_files(names, tmp_path)["params"][0]["file"] == ""
     names = {"params": [{"name": "p", "role": "data", "file": "saved.json"}]}  # data files are the app's own
     assert fill_input_files(names, tmp_path)["params"][0]["file"] == "saved.json"
+
+
+DIALOG_DB = '''
+import sqlite3
+from textual.app import App
+from textual.screen import ModalScreen
+from textual.widgets import Input, Static
+
+
+class Ask(ModalScreen):
+    def compose(self):
+        yield Input(id="title")
+
+    def on_input_submitted(self, event):
+        self.dismiss(event.value)
+
+
+class Db(App):
+    BINDINGS = [("a", "add", "Add")]
+
+    def __init__(self, db_path="items.db"):
+        super().__init__()
+        self.con = sqlite3.connect(db_path)
+        self.con.execute("CREATE TABLE IF NOT EXISTS items (title TEXT)")
+
+    def compose(self):
+        yield Static(id="list")
+
+    def on_mount(self):
+        self.show()
+
+    def show(self):
+        self.query_one("#list", Static).update(" ".join(r[0] for r in self.con.execute("SELECT title FROM items")))
+
+    def action_add(self):
+        def done(title):
+            self.con.execute("INSERT INTO items VALUES (?)", (title,))
+            self.con.commit()
+            self.show()
+        self.push_screen(Ask(), done)
+'''
+
+
+def test_try_app_focuses_dialog_widgets_and_shows_sqlite(tmp_path):
+    (tmp_path / "db.py").write_text(DIALOG_DB)
+    names = {"module": "db", "app_class": "Db", "params": params("db_path:data:items.db")}
+    out = try_app(tmp_path, names, "press:a", "focus:#title", "type:milk", "press:enter", "restart", "expect:milk")
+    assert "CRASH" not in out and "ok: expect:milk" in out
+    assert "SQLite: table items: ('milk',)" in out
+    out = try_app(tmp_path, names, "--file-text", "db_path=[]")
+    assert "db_path is a SQLite database: --file-text can't fill it" in out

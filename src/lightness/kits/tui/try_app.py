@@ -112,8 +112,9 @@ def describe(widget) -> list[str]:
             [f"  … {below} more"] if below > 0 else [])
     if "TextArea" in bases:
         return [f"{name(widget)} text (cursor {widget.cursor_location}): {cut(widget.text)!r}"]
-    if "Input" in bases:
-        return [f"{name(widget)} input: {widget.value!r}"]
+    if "Input" in bases:  # its classes too: validity is often a class (e.g. -invalid)
+        classes = f" classes: {' '.join(sorted(widget.classes))}" if widget.classes else ""
+        return [f"{name(widget)} input: {widget.value!r}{classes}"]
     if "Select" in bases or "Checkbox" in bases or "Switch" in bases:
         return [f"{name(widget)} {kind.lower()}: {widget.value!r}"]
     if "RadioSet" in bases:

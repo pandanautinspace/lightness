@@ -925,3 +925,12 @@ def test_try_app_tree_rows_are_numbered_and_follow_the_cursor(tmp_path):
     out = try_app(tmp_path, {"module": "t", "app_class": "T", "params": []}, "press:" + ",".join(["down"] * 30))
     assert "#tree tree, 41 rows (up/down move one row):" in out
     assert "[30]     n29 ◀ cursor" in out and "rows above" in out
+
+
+def test_try_app_input_line_shows_its_classes(tmp_path):
+    (tmp_path / "v.py").write_text(
+        "from textual.app import App\nfrom textual.widgets import Input\n\n\nclass V(App):\n"
+        "    def compose(self):\n        yield Input(id='n')\n\n    def on_input_changed(self, event):\n"
+        "        event.input.set_class(not event.value.isdigit(), '-invalid')\n")
+    out = try_app(tmp_path, {"module": "v", "app_class": "V", "params": []}, "focus:#n", "type:x", "expect:-invalid")
+    assert "#n input: 'x' classes: -invalid" in out and "ok: expect:-invalid" in out

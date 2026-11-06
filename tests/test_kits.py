@@ -914,3 +914,14 @@ def test_lint_rejects_file_names_where_parameter_names_go():
     assert "'trip.json' is not a file parameter of the App (they are: data_path)" in problems
     assert "expect-file takes a file parameter's name" in problems
     assert lint(shlex.split("--file-text data_path='{}' expect-file:data_path='{}'"), ["data_path"]) == []
+
+
+def test_try_app_tree_rows_are_numbered_and_follow_the_cursor(tmp_path):
+    (tmp_path / "t.py").write_text(
+        "from textual.app import App\nfrom textual.widgets import Tree\n\n\nclass T(App):\n"
+        "    def compose(self):\n        yield Tree('root', id='tree')\n\n    def on_mount(self):\n"
+        "        t = self.query_one(Tree)\n        for i in range(40):\n            t.root.add_leaf(f'n{i}')\n"
+        "        t.root.expand()\n        t.focus()\n")
+    out = try_app(tmp_path, {"module": "t", "app_class": "T", "params": []}, "press:" + ",".join(["down"] * 30))
+    assert "#tree tree, 41 rows (up/down move one row):" in out
+    assert "[30]     n29 ◀ cursor" in out and "rows above" in out

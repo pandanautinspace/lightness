@@ -102,7 +102,14 @@ def describe(widget) -> list[str]:
                     walk(child, depth + 1)
 
         walk(widget.root, 0)
-        return [f"{name(widget)} tree:"] + rows(lines)
+        # number the rows (row = cursor_line, so a check can count presses) and keep the cursor in view
+        lines = [f"  [{i}]{line[1:]}" for i, line in enumerate(lines)]
+        at = next((i for i, line in enumerate(lines) if line.endswith("◀ cursor")), 0)
+        start = max(0, min(at - ROWS // 2, len(lines) - ROWS))
+        shown = ([f"  … {start} rows above"] if start else []) + lines[start:start + ROWS]
+        below = len(lines) - start - ROWS
+        return [f"{name(widget)} tree, {len(lines)} rows (up/down move one row):"] + shown + (
+            [f"  … {below} more"] if below > 0 else [])
     if "TextArea" in bases:
         return [f"{name(widget)} text (cursor {widget.cursor_location}): {cut(widget.text)!r}"]
     if "Input" in bases:

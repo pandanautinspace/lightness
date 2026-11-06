@@ -882,3 +882,14 @@ def test_a_failing_expect_only_check_says_it_saw_a_fresh_app(tmp_path):
              "params": params("places_path:input:places.csv", "saved_path:data:saved.json")}
     out = try_app(tmp_path, names, "--checks", "checks.txt")
     assert "it looked at a freshly started app" in out
+
+
+def test_file_option_with_text_instead_of_a_path_fails_only_that_check(tmp_path):
+    (tmp_path / "both.py").write_text(TWO_FILES)
+    (tmp_path / "places.csv").write_text("ams\n")
+    (tmp_path / "checks.txt").write_text("text not path: --file places_path='a,b' expect:x\nfine: press:a\n")
+    names = {"module": "both", "app_class": "Both",
+             "params": params("places_path:input:places.csv", "saved_path:data:saved.json")}
+    out = try_app(tmp_path, names, "--checks", "checks.txt")
+    assert "there is no file 'a,b'. To give the contents, use --file-text places_path=" in out
+    assert "PASS fine" in out and "could not run" not in out

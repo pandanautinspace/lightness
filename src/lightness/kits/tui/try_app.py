@@ -534,6 +534,10 @@ def prepare(config: dict, a, tmp: Path):
                 text = text.replace("\\n", "\n").replace("\\t", "\t")  # \n and \t mean line break, tab
             path.write_text(text)
         elif f["name"] in copies:
+            if not Path(copies[f["name"]]).is_file():
+                say(f"--file {f['name']}=PATH copies a file, and there is no file {copies[f['name']][:60]!r}. "
+                    f"To give the contents, use --file-text {f['name']}='...'")
+                return 2
             shutil.copy(copies[f["name"]], path)
         elif Path(default).is_file() and (f["role"] == "input" or not a.empty):
             # a data file the project already has (e.g. shipped records) starts as a copy, as

@@ -503,6 +503,20 @@ def test_try_app_gives_a_two_file_app_both_files(tmp_path):
     assert "NAME one of the App's file parameters: places_path, saved_path" in out
 
 
+def test_try_app_data_param_starts_from_the_projects_file(tmp_path):
+    """A model may label a provided, read-only file as data: it still starts as the project's copy
+    (as `python app.py` would read it), except under --empty (the harness's own no-file check)."""
+    (tmp_path / "both.py").write_text(TWO_FILES)
+    (tmp_path / "places.csv").write_text("ams\nber\n")
+    names = {"module": "both", "app_class": "Both",
+             "params": params("places_path:data:places.csv", "saved_path:data:saved.json")}
+    out = try_app(tmp_path, names)
+    assert "places_path: a copy of the project's places.csv" in out and "#places: 'ams ber'" in out
+    assert "saved_path: no file yet" in out
+    out = try_app(tmp_path, names, "--empty")
+    assert "places_path: no file yet" in out
+
+
 def test_try_app_gives_an_input_only_app_its_file(tmp_path):
     (tmp_path / "viewer.py").write_text(
         "from pathlib import Path\nfrom textual.app import App\nfrom textual.widgets import Static\n\n\n"

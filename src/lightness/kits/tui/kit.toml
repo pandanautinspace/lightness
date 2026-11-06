@@ -28,7 +28,7 @@ help = "a short human title for the app"
 schema = { type = "string", maxLength = 60 }
 
 [names.params]
-help = """the App __init__ parameters, in the contract's order (exact names), each with a role: data (a file the app reads and writes, e.g. its saved records), input (a file the app only reads), clock (a zero-argument callable returning seconds, for anything timed), seed (for randomness), other (any other argument, e.g. a starting value or size). `file` is the default file name for a data or input parameter (the contract's default if it gives one, e.g. notes.json), and "" for the other roles. [] if the app takes no parameters"""
+help = """the App __init__ parameters, in the contract's order (exact names), each with a role: data (a file the app writes: it saves to it, e.g. its saved records or favorites), input (a file the app only reads and never writes, e.g. a provided CSV or JSON of records to look up or view), clock (a zero-argument callable returning seconds, for anything timed), seed (for randomness), other (any other argument, e.g. a starting value or size). `file` is the default file name for a data or input parameter (the contract's default if it gives one, e.g. notes.json), and "" for the other roles. [] if the app takes no parameters"""
 
 [names.params.schema]
 type = "array"

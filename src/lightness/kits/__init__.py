@@ -173,7 +173,8 @@ def describe_params(names: dict) -> str:
     said = []
     for p in names.get("params") or []:
         if p["role"] == "data":
-            said.append(f"`{p['name']}` (data file: starts with no file)")
+            said.append(f"`{p['name']}` (data file: starts as a copy of the project's {default_file(p)} if there "
+                        "is one, else with no file)")
         elif p["role"] == "input":
             said.append(f"`{p['name']}` (input file: starts as a copy of the project's {default_file(p)} "
                         f"if there is one)")
@@ -211,8 +212,8 @@ def checks_example(names: dict) -> str:
     given = next((p["name"] for p in files if p["role"] == "input"), None)
     lines = []
     if data:
-        lines += [f"Example, for an app whose data file parameter is `{data}` (each check starts with no {data} "
-                  "file unless it gives one):", "",
+        lines += [f"Example, for an app whose data file parameter is `{data}` (each check starts with a copy of "
+                  "the project's file if there is one, else with none, unless it gives one):", "",
                   f"    add an item: focus:#name type:milk press:enter expect:\"milk\" expect-file:{data}='[{{\"name\": \"milk\"}}]'",
                   f"    kept after restart: --file-text {data}='[{{\"name\": \"milk\"}}]' restart expect:\"milk\""]
     if given:

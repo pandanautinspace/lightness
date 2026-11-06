@@ -397,6 +397,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--kw", action="append", default=[], help="extra App argument NAME=VALUE (Python literal)")
     p.add_argument("--checks", metavar="FILE", help="run each line of FILE (NAME: [options] STEP ...) as a check")
     p.add_argument("--builtin", action="store_true", help="also run the harness's own checks")
+    p.add_argument("--empty", action="store_true", help="start data files missing even when the project has one")
     p.add_argument("steps", nargs="*")
     return p
 
@@ -432,7 +433,9 @@ def prepare(config: dict, a, tmp: Path):
             path.write_text(texts[f["name"]])
         elif f["name"] in copies:
             shutil.copy(copies[f["name"]], path)
-        elif f["role"] == "input" and Path(default).is_file():
+        elif Path(default).is_file() and (f["role"] == "input" or not a.empty):
+            # a data file the project already has (e.g. shipped records) starts as a copy, as
+            # `python app.py` would read it; the harness's own no-file check passes --empty
             shutil.copy(default, path)
             said.append(f"{f['name']}: a copy of the project's {default}")
         else:
@@ -607,7 +610,7 @@ def builtin_checks(config: dict, cls) -> list[tuple[str, str | None]]:
     for label, file_text in cases:
         if not keys:
             break
-        problems = asyncio.run(case_check([f"--file-text={t}" for t in file_text]))
+        problems = asyncio.run(case_check([f"--file-text={t}" for t in file_text] + ([] if file_text else ["--empty"])))
         out.append((f"harness: every key works, starting with {label}", "\n".join(problems[:3]) or None))
     if any(p["role"] == "clock" for p in params):
         async def time_moves():

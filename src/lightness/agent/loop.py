@@ -345,6 +345,9 @@ class TranscriptAgent:
                 if SUBMIT_MARK in command:
                     notes.append(SUBMIT_HINT)
                 ctx.messages.append(self._tool(call, observation(output) + "".join("\n\n" + n for n in notes)))
+                with (self.run_dir / "steps.jsonl").open("a") as f:  # live view of a run (watch_run.py)
+                    f.write(json.dumps({"step": ctx.step, "t": round(time.time() - start), "command": command,
+                                        "output": ctx.messages[-1]["content"][-1500:]}) + "\n")
 
     def _end(self, ctx: Ctx, status: str, submitted: bool) -> Result:
         (self.run_dir / "messages.json").write_text(json.dumps(ctx.messages, indent=1))

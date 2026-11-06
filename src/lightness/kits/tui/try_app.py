@@ -346,6 +346,26 @@ def css_error_text(exc) -> str:
     return "CSS error in the app's CSS:\n" + "\n".join(out[:24])
 
 
+def not_clickable(app, selector: str) -> str | None:
+    """Why a click on the widget would miss (it is clipped or covered), or None if it would land."""
+    widget = app.screen.query_one(selector)
+    region = widget.region
+    if not region.area:
+        return "it takes no space on the screen"
+    x, y = region.x + region.width // 2, region.y + region.height // 2
+    try:
+        hit, _ = app.screen.get_widget_at(x, y)
+    except Exception:  # noqa: BLE001 - off the screen
+        hit = None
+    node = hit
+    while node is not None and node is not widget:
+        node = node.parent
+    if node is None:
+        return (f"its middle ({x}, {y}) shows {name(hit) if hit else 'nothing'} instead: it is cut off by its "
+                f"container or the {app.size.width}x{app.size.height} screen")
+    return None
+
+
 def crash_text() -> str:
     exc = sys.exc_info()[1]
     if type(exc).__name__ == "StylesheetParseError":
@@ -398,6 +418,10 @@ async def run(cls, kw, data_files: dict[str, Path], clock: FakeClock | None, ste
                         say(f"  no widget matches {value!r} on this screen; ids here: {', '.join(ids) or 'none'}")
                         continue
                     elif action == "click":
+                        if (hidden := not_clickable(app, value)) is not None:
+                            say(f"  {value} can't be clicked: {hidden}. A user couldn't click it either: fix the "
+                                "layout (sizes of it and its container), or focus it and press enter")
+                            continue
                         await pilot.click(value)
                     elif action == "focus":
                         app.screen.query_one(value).focus()  # the active screen: a dialog's widgets too
@@ -442,7 +466,8 @@ def pairs(items: list[str], flag: str, names: list[str]) -> dict[str, str] | Non
     for item in items:
         key, sep, value = item.partition("=")
         if not sep or key not in names:
-            say(f"{flag} takes NAME=VALUE with NAME one of the App's file parameters: {', '.join(names) or 'none'}")
+            say(f"{flag} takes NAME=VALUE with NAME one of the App's file parameters: {', '.join(names) or 'none'}"
+                f" (got {item[:40]!r}; write {names[0] if names else 'NAME'}=..., with '=')")
             return None
         out[key] = value
     return out

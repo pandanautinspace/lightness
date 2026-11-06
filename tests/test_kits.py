@@ -807,3 +807,20 @@ def test_empty_expect_is_an_error():
 
     assert "needs the text" in expectation("expect", "", {"w": ["x"]}, {})
     assert "needs the text" in expectation("expect-not", "  ", {"w": ["x"]}, {})
+
+
+def test_try_app_says_when_a_click_would_miss(tmp_path):
+    (tmp_path / "dlg.py").write_text(
+        "from textual.app import App\nfrom textual.containers import Horizontal\nfrom textual.screen import ModalScreen\n"
+        "from textual.widgets import Button, Static\n\n\nclass Ask(ModalScreen):\n"
+        "    DEFAULT_CSS = 'Ask { align: center middle; } Ask > Horizontal { width: 20; height: auto; }'\n\n"
+        "    def compose(self):\n        with Horizontal():\n"
+        "            yield Button('Save', id='save')\n            yield Button('Cancel', id='cancel')\n\n"
+        "    def on_button_pressed(self, e):\n        self.dismiss(e.button.id)\n\n\n"
+        "class D(App):\n    BINDINGS = [('q', 'ask', 'Ask')]\n\n    def compose(self):\n        yield Static('main', id='st')\n\n"
+        "    def action_ask(self):\n        self.push_screen(Ask(), lambda r: self.query_one('#st', Static).update(f'got {r}'))\n")
+    names = {"module": "dlg", "app_class": "D", "params": []}
+    out = try_app(tmp_path, names, "press:q", "click:#cancel")
+    assert "#cancel can't be clicked" in out and "cut off by its container" in out
+    out = try_app(tmp_path, names, "press:q", "click:#save")
+    assert "got save" in out

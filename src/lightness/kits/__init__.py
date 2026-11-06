@@ -203,13 +203,36 @@ def part_text(part: Part) -> str:
     return f"\n### Part `{part.name}`\n```python\n{part.path.read_text()}```\n"
 
 
+def checks_example(names: dict) -> str:
+    """Example check lines using this app's own file parameters: each check starts its own app, so
+    a check that needs a file must give it with --file-text (data files start missing)."""
+    files = file_params(names)
+    data = next((p["name"] for p in files if p["role"] == "data"), None)
+    given = next((p["name"] for p in files if p["role"] == "input"), None)
+    lines = []
+    if data:
+        lines += [f"Example, for an app whose data file parameter is `{data}` (each check starts with no {data} "
+                  "file unless it gives one):", "",
+                  f"    add an item: focus:#name type:milk press:enter expect:\"milk\" expect-file:{data}='[{{\"name\": \"milk\"}}]'",
+                  f"    kept after restart: --file-text {data}='[{{\"name\": \"milk\"}}]' restart expect:\"milk\""]
+    if given:
+        lines += ([""] if lines else []) + [
+            f"Example, for an app whose input file parameter is `{given}` (each check starts with a copy of the "
+            f"project's {default_file(next(p for p in files if p['name'] == given))} if there is one; give the "
+            "input each check needs with --file-text):", "",
+            f"    shows the first record: --file-text {given}='...' expect:\"...\"",
+            f"    bad input: --file-text {given}='not valid' expect:\"error\""]
+    if not lines:
+        lines = ["Example:", "", '    add an item: focus:#name type:milk press:enter expect:"milk"']
+    return "\n".join(lines)
+
+
 def checking(kit: Kit, names: dict, tests: str) -> str:
     """The checks section, for the checks testing arm."""
     path = kit.dir / "checks.md"
     if tests != "checks" or not path.exists():
         return ""
-    data = next((p["name"] for p in file_params(names) if p["role"] == "data"), None)
-    return path.read_text().replace("{data}", data or "PARAM") + "\n\n"
+    return path.read_text().replace("{example}", checks_example(names)) + "\n\n"
 
 
 def context(kit: Kit, names: dict, parts_dir: str, chosen: list[str], tests: str = "none") -> str:

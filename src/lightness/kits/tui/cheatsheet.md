@@ -9,6 +9,9 @@
 - `Input.Submitted` has `.input`, `.value`, `.validation_result`; handler
   `on_input_submitted(self, event)`. Clear with `event.input.value = ""`. Scope with
   `@on(Input.Submitted, "#id")`.
+- `Tree`: `tree.select_node(node)` posts `NodeSelected`, which toggles that node open/closed
+  (so calling it on the root you just expanded collapses it). To move the cursor without
+  toggling, use `tree.move_cursor(node)`.
 - `ListView`: `await lv.clear()`, `await lv.append(ListItem(Label(text)))`, `await lv.extend(...)`,
   `lv.index`, `lv.highlighted_child`; events `ListView.Selected` (enter) and `ListView.Highlighted`.
   After clear + extend, `index` is `None`: set it again.

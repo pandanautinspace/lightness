@@ -675,3 +675,13 @@ def test_try_app_builtin_checks(tmp_path):
     (tmp_path / "counter.py").write_text(counter(start=1))
     out = try_app(tmp_path, COUNTER, "--builtin")
     assert "after pressing plus, d the path file held 1; starting the app again changed it to 2" in out
+
+
+def test_checks_example_uses_the_apps_file_params():
+    from lightness.kits import checks_example
+
+    given = checks_example({"params": [{"name": "json_path", "role": "input", "file": "input.json"}]})
+    assert "--file-text json_path=" in given and "expect-file" not in given and "PARAM" not in given
+    data = checks_example({"params": [{"name": "data_path", "role": "data", "file": "notes.json"}]})
+    assert "expect-file:data_path=" in data and "--file-text data_path=" in data
+    assert "--file-text" not in checks_example({"params": []})

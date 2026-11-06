@@ -13,11 +13,9 @@ plus three that check what is there at that point:
 - `expect-not:TEXT`: TEXT is not on the screen.
 - `expect-file:PARAM=TEXT`: the data file PARAM holds exactly TEXT (JSON is compared as values).
 
-Quote a step that has spaces: `expect:"total: 3"`. Lines starting with `#` are comments. Example,
-for an app whose data parameter is `{data}`:
+Quote a step that has spaces: `expect:"total: 3"`. Lines starting with `#` are comments.
 
-    add an item: focus:#name type:milk press:enter expect:"milk" expect-file:{data}='[{"name": "milk"}]'
-    kept after restart: --file-text {data}='[{"name": "milk"}]' restart expect:"milk"
+{example}
 
 Write one check per contract item: each key and what it does, the saved file's exact format,
 starting with no data file and with existing data, and wrong input. Take the expected values

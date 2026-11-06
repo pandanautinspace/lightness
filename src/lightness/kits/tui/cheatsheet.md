@@ -9,6 +9,10 @@
 - `Input.Submitted` has `.input`, `.value`, `.validation_result`; handler
   `on_input_submitted(self, event)`. Clear with `event.input.value = ""`. Scope with
   `@on(Input.Submitted, "#id")`.
+- `Select(options, prompt="Payer", id=...)`: `options` (a list of `(label, value)`) is required, possibly
+  `[]`; there is no `placeholder=`. Options that change: `select.set_options([...])`, then set
+  `select.value` to one of them (any other value raises `InvalidSelectValueError`; `set_options`
+  resets the value to `Select.NULL`, the empty value).
 - `Tree`: `tree.select_node(node)` posts `NodeSelected`, which toggles that node open/closed
   (so calling it on the root you just expanded collapses it). To move the cursor without
   toggling, use `tree.move_cursor(node)`.

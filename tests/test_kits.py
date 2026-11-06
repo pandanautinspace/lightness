@@ -955,3 +955,11 @@ def test_start_check_names_close_attributes_for_an_attribute_error(tmp_path):
     text = smoke.summarize(bad, "attr.py")
     assert "hint: TreeNode has no 'children_count'. Closest names on TreeNode: children" in text
     assert "<string>" not in text
+
+
+def test_try_app_shows_an_empty_widget_that_has_an_id(tmp_path):
+    (tmp_path / "e.py").write_text(
+        "from textual.app import App\nfrom textual.widgets import Static\n\n\nclass E(App):\n"
+        "    def compose(self):\n        yield Static('', id='detail')\n        yield Static('')\n")
+    out = try_app(tmp_path, {"module": "e", "app_class": "E", "params": []})
+    assert "#detail: (empty)" in out and out.count("(empty)") == 1

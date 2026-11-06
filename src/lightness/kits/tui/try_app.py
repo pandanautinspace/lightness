@@ -135,7 +135,9 @@ def describe(widget) -> list[str]:
         lines = [str(x) for x in getattr(widget, "lines", [])]
         return [f"{name(widget)} log, last lines:"] + ["  " + cut(plain(x) or str(x)) for x in lines[-ROWS:]]
     text = plain(widget.render())
-    return [f"{name(widget)}: {cut(text)!r}"] if text else []
+    if not text:  # an empty widget the task names (has an id) is shown, so "empty" differs from "missing"
+        return [f"{name(widget)}: (empty)"] if widget.id else []
+    return [f"{name(widget)}: {cut(text)!r}"]
 
 
 def grid(widget) -> list[str] | None:

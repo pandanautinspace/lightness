@@ -16,6 +16,8 @@
 - Mouse clicks: `from textual import events`, then `def on_click(self, event: events.Click)` on the
   App (or the widget); `event.widget` is the widget clicked (e.g. `event.widget.id == "cell-1-2"`).
   There is no `Static.Click`.
+- `TextArea`: text it loads starts with the cursor at the start, (0, 0). To type after it, move first:
+  `end` (or `ctrl+e`) goes to the end of the line, `down` to the next line; there is no `ctrl+end`.
 - Tabs: build them in `compose()` with `with TabbedContent(id="tabs"):` and, inside,
   `with TabPane("People", id="people"):` then `yield` that tab's widgets. Don't pass TabPane
   objects to `TabbedContent(...)` (its arguments are titles) and don't mount into a TabPane from

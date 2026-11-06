@@ -672,7 +672,7 @@ def test_try_app_checks_file(tmp_path):
     assert "PASS bump\n" in out
     assert "FAIL wrong\n" in out and "FAILED expect:count 9" in out and "after press:plus:\n      #shown: 'count 1'" in out
     assert "FAIL line 5\n    not a check:" in out
-    assert "FAIL quotes\n    can't split the line into steps" in out
+    assert "FAIL quotes\n    not run: can't split the line into steps" in out
     assert "FAIL bad option\n" in out
     assert out.strip().endswith("1 of 5 checks pass")
 
@@ -835,3 +835,17 @@ def test_checks_file_rejects_duplicate_names(tmp_path):
     out = try_app(tmp_path, names, "--checks", "checks.txt")
     assert "FAIL line 2\n    the name 'CHECK' is already used on line 1" in out
     assert "PASS CHECK" in out and "PASS other" in out and "of 3 checks pass" in out
+
+
+def test_check_lines_are_linted_before_running(tmp_path):
+    (tmp_path / "both.py").write_text(TWO_FILES)
+    (tmp_path / "places.csv").write_text("ams\n")
+    (tmp_path / "checks.txt").write_text(
+        'bad: type:two words press:#save expect:#id expect:""\ngood: press:a\n')
+    names = {"module": "both", "app_class": "Both",
+             "params": params("places_path:input:places.csv", "saved_path:data:saved.json")}
+    out = try_app(tmp_path, names, "--checks", "checks.txt")
+    assert "FAIL bad\n    not run: 'words' is not a step" in out
+    assert "press takes key names; to press a button, click:#save" in out
+    assert "expect matches text on the screen, not a selector" in out and "has no text to look for" in out
+    assert "PASS good" in out

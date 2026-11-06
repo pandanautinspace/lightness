@@ -572,6 +572,37 @@ DETAIL = 30  # lines of a failing check's output shown
 BAD_NAME = re.compile(r"^(--|(type|press|click|focus|wait|advance|restart|expect|expect-not|expect-file)(:|$))")
 
 
+STEP_NAMES = ("type", "press", "click", "focus", "wait", "advance", "expect", "expect-not", "expect-file")
+OPTIONS = ("--file", "--file-text", "--kw", "--data", "--data-from")
+
+
+def lint(tokens: list[str]) -> list[str]:
+    """Every mistake in one check's steps that can be seen without running it."""
+    problems, i = [], 0
+    while i < len(tokens):
+        tok = tokens[i]
+        opt = tok.split("=", 1)[0]
+        if opt in OPTIONS:
+            i += 1 if "=" in tok else 2
+            continue
+        if tok.startswith("-"):
+            problems.append(f"{tok!r} is not an option (options: {', '.join(OPTIONS)})")
+        elif tok == "restart":
+            pass
+        elif ":" not in tok or tok.split(":", 1)[0] not in STEP_NAMES:
+            problems.append(f"{tok!r} is not a step: text with spaces needs quotes, e.g. type:\"two words\"")
+        else:
+            action, value = tok.split(":", 1)
+            if action in ("expect", "expect-not") and not value.strip():
+                problems.append(f"{tok!r} has no text to look for")
+            elif action in ("expect", "expect-not") and re.match(r"^[#.][\w-]", value):
+                problems.append(f"{tok!r}: expect matches text on the screen, not a selector")
+            elif action == "press" and value.startswith("#"):
+                problems.append(f"{tok!r}: press takes key names; to press a button, click:{value}")
+        i += 1
+    return problems
+
+
 def file_checks(config: dict, cls, path: Path) -> list[tuple[str, str | None]]:
     """(name, None if it passed else its output) for each line of a checks file."""
     out, seen = [], {}
@@ -588,6 +619,13 @@ def file_checks(config: dict, cls, path: Path) -> list[tuple[str, str | None]]:
         if not sep or BAD_NAME.match(name.strip()):
             out.append((f"line {n}", f"not a check: {line[:80]!r}. A check line is a short name of your own, then "
                         "': ', then the steps, e.g.\n    typing marks it modified: type:hello expect:modified"))
+            continue
+        try:
+            problems = lint(shlex.split(rest))
+        except ValueError as e:
+            problems = [f"can't split the line into steps: {e}"]
+        if problems:
+            out.append((name.strip(), "not run: " + "; ".join(problems)))
             continue
         buf = io.StringIO()
         OUT[0] = buf

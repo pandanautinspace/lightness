@@ -422,3 +422,15 @@ def test_kit_checks_arm_nudges_after_three_tries_in_a_row(ws):
     TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("checks")], step_limit=8).run("notes app")
     outs = tool_outputs(client)
     assert mw.TRIES_NUDGE not in outs[1] + outs[2] and mw.TRIES_NUDGE in outs[3] and mw.TRIES_NUDGE not in outs[4]
+
+
+def test_kit_checks_arm_suspects_the_checks_after_two_ineffective_app_changes(ws):
+    checks = write("checks.txt", "count: --file-text data_path='[{\"text\": \"a\"}]' expect:\"9 notes\"\n")
+    t1 = """sed -i '' 's/update("")/update(" ")/' notes.py"""
+    t2 = """sed -i '' 's/update(" ")/update("  ")/' notes.py"""
+    run_dir = ws.parent
+    env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
+    client = KitClient([checks, t1, t2, SUBMIT, SUBMIT, "echo never"], NOTES)
+    TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("checks")], step_limit=7).run("notes app")
+    outs = tool_outputs(client)
+    assert mw.CHECKS_SUSPECT not in outs[1] and mw.CHECKS_SUSPECT in outs[2]

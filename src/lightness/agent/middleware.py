@@ -209,6 +209,9 @@ CHECKS_REFUSED = ("Not submitted yet: some checks fail. Fix the app, or a check 
                   "the task, then submit again.")
 CHECKS_MISSING = ("No checks.txt yet, so nothing checks the task's contract. Write the contract as checks in "
                   "checks.txt now (see Checks), before writing more of the app.")
+CHECKS_SUSPECT = ("Two app changes in a row fixed none of them, so suspect the checks: read each failing check "
+                  "against the task (is the expected text right, in the task's format? do its steps first do what "
+                  "the result needs, e.g. start the timer before time passes?) and fix the check if it is wrong.")
 TRIES_NUDGE = ("[automatic checks] That's three try commands in a row with no change to the app or checks.txt. "
                "What you are verifying by hand belongs in checks.txt (each line runs after every change); "
                "otherwise change the app.")
@@ -408,13 +411,19 @@ class Kit(Middleware):
         text_now = checks_file.read_text() if checks_file.exists() else None
         checks_changed = text_now != ctx.data.get("kit.checks_text")
         ctx.data["kit.checks_text"] = text_now
+        if now != prev or checks_changed:
+            ctx.data["kit.no_effect"] = 0
         if now == prev and not checks_changed:  # a rewritten checks.txt always gets a report
             if not app_changed:
                 return None
             # the app changed and nothing moved: say so briefly (silence reads as "no checks ran")
             failing = [n for n, v in now.items() if v is not None]
-            return (f"[automatic checks] Still {len(now) - len(failing)} of {len(now)} checks pass: this change "
+            ctx.data["kit.no_effect"] = ctx.data.get("kit.no_effect", 0) + 1
+            text = (f"[automatic checks] Still {len(now) - len(failing)} of {len(now)} checks pass: this change "
                     f"fixed none and broke none." + (f" Failing: {', '.join(failing)}." if failing else ""))
+            if failing and ctx.data["kit.no_effect"] >= 2:
+                text += " " + CHECKS_SUSPECT
+            return text
         if not checks_file.exists():
             # the app changed but there is no checks.txt: only the harness's own checks ran
             failing = [n for n, v in now.items() if v is not None]

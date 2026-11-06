@@ -203,6 +203,7 @@ TESTS_AFTER = ("Not submitted yet. Before submitting: write tests for the task's
 
 CHECKS_REFUSED = ("Not submitted yet: some checks fail. Fix the app, or a check in checks.txt that disagrees with "
                   "the task, then submit again.")
+CHECKS_ALL_PASS = "If checks.txt covers every item of the task's contract, submit now; otherwise add the missing checks."
 CHECKS_SHOWN, CHECK_LINES = 4, 15  # failing checks shown in full, and lines of each
 
 
@@ -214,6 +215,8 @@ def checks_text(results: dict[str, str | None], regressions: list[str]) -> str:
         lines += ["  " + line for line in detail.splitlines()[-CHECK_LINES:]]
     if len(failing) > CHECKS_SHOWN:
         lines.append(f"Also failing: {', '.join(list(failing)[CHECKS_SHOWN:])}")
+    if not failing:
+        lines.append(CHECKS_ALL_PASS)
     return "\n".join(lines)
 
 

@@ -18,6 +18,5 @@
   it; draw random numbers from `random.Random(seed)`. Then the try command's `advance:SECONDS`
   and tests move time without waiting. Don't wait for long stretches with `set_timer` (it counts
   real seconds); check the clock on a short `set_interval` instead.
-- **Testing:** {testing} With the try command (below), run the steps a user would and
-  compare what it prints with the task. Don't test by calling methods on an app that was never
+- **Testing:** {testing} Don't test by calling methods on an app that was never
   started, and don't run the app in the foreground: there is no terminal.

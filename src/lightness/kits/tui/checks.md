@@ -1,7 +1,8 @@
 ## Checks
 
-`checks.txt` holds the task's contract as checks. After every change the harness runs each one in
-a fresh app and tells you which fail, and which passed before and fail now. One check per line:
+Your first file is `checks.txt` (it doesn't exist yet: create it before any app code). It holds the
+task's contract as checks. After every change the harness runs each one in a fresh app and tells
+you which fail, and which passed before and fail now. One check per line:
 
     NAME: [--file-text PARAM=TEXT ...] STEP ...
 
@@ -24,6 +25,6 @@ from the task. The harness already checks on its own that every key works withou
 and without a data file), that a start keeps the saved file, and that time can move: don't
 write checks for those.
 
-Run them yourself with `python .lightness/kit/try_app.py --checks checks.txt`. When a check
+You don't need to run them yourself: the harness reports after every change. When a check
 fails, fix the app; change the check only if it disagrees with the task, and then edit that one
 line (e.g. with sed) instead of writing the file again. A submit is refused once while checks fail.

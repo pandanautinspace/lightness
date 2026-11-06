@@ -3,13 +3,17 @@
 # Parts always shown in full (not only in the index).
 always = []
 
-# The notes' testing bullet, per testing arm (bench --tests). "after" also asks for tests on the first submit;
+# The notes' testing bullet, per testing arm (bench --tests). try_goal: how try.md ends, per arm (default: none's). "after" also asks for tests on the first submit;
 # "checks" also adds checks.md and has the harness run the checks.
 [testing]
-none = "Check the real app with the try command after each change. Write test files only if the task asks (then follow the headless_test part)."
-first = "Before writing the app, write tests from the task's contract (follow the headless_test part). Then build the app until they pass. Use the try command to see what the app does."
-after = "Check the real app with the try command after each change. Write test files only if the task asks (then follow the headless_test part)."
-checks = "Before writing the app, write the task's contract as checks in `checks.txt` (see Checks below). The harness runs them after every change and tells you which fail; build the app until they all pass. Write pytest files only if the task asks (then follow the headless_test part)."
+none = "Check the real app with the try command after each change. Write test files only if the task asks (then follow the headless_test part). With the try command (below), run the steps a user would and compare what it prints with the task."
+first = "Before writing the app, write tests from the task's contract (follow the headless_test part). Then build the app until they pass. Use the try command to see what the app does. With the try command (below), run the steps a user would and compare what it prints with the task."
+after = "Check the real app with the try command after each change. Write test files only if the task asks (then follow the headless_test part). With the try command (below), run the steps a user would and compare what it prints with the task."
+checks = "First, before writing any app code, create `checks.txt` with the task's contract as checks (see Checks below). The harness runs them after every change and tells you which fail; build the app until they all pass, then submit. Write pytest files only if the task asks (then follow the headless_test part)."
+
+[try_goal]
+none = "Try what the task describes: each key in the contract, starting with no data file and with\nexisting data, and a restart after a change. Compare what it prints with what the task asks for."
+checks = "Use it to see why a check fails. Your checks in `checks.txt` are the tests: don't repeat them by hand."
 
 [names.module]
 help = "file name of the app module without .py (e.g. the contract's `notes.py` → notes)"

@@ -288,6 +288,11 @@ def test_kit_testing_arms(ws, tests):
     assert ("Write test files only if the task asks" in first_user) == (tests in ("none", "after"))
     assert ("### Part `headless_test`" in first_user) == (tests == "first")
     assert ("## Checks" in first_user and "expect-file:data_path=" in first_user) == (tests == "checks")
+    # the checks arm puts Checks before the try command and doesn't ask for trying by hand
+    assert ("run the steps a user would" in first_user) == (tests != "checks")
+    assert ("Try what the task describes" in first_user) == (tests != "checks")
+    if tests == "checks":
+        assert first_user.index("## Checks") < first_user.index("## Trying the app")
     if tests == "after":  # the first submit asks for tests and shows the guide; the second goes through
         assert res.submitted and res.steps == 2
         reply = tool_outputs(client)[0]
@@ -307,7 +312,8 @@ def test_kit_checks_arm_reports_regressions_and_refuses_one_submit(ws):
     res = TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("checks")], step_limit=8).run("notes app")
     outs = tool_outputs(client)
     assert "[automatic checks] 1 of 2 checks pass.\nFAIL count\n" in outs[0] and "FAILED expect:1 notes" in outs[0]
-    assert "[automatic checks] 2 of 2 checks pass." in outs[1]
+    assert "[automatic checks] 2 of 2 checks pass.\n" + mw.CHECKS_ALL_PASS in outs[1]
+    assert mw.CHECKS_ALL_PASS not in outs[0]
     assert "FAIL count (passed before this change)" in outs[2] and "FAIL empty (passed before this change)" in outs[2]
     assert outs[3].startswith(mw.CHECKS_REFUSED) and "0 of 2 checks pass" in outs[3]
     assert res.submitted and res.steps == 5  # refused once only

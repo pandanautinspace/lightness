@@ -182,11 +182,13 @@ def describe_params(names: dict) -> str:
     return ("Parameters it passes: " + ", ".join(said) + ".") if said else "The app takes no file or clock parameters."
 
 
-def trying(kit: Kit, names: dict) -> str:
+def trying(kit: Kit, names: dict, tests: str = "none") -> str:
     path = kit.dir / "try.md"
     if not (kit.try_tool and path.exists()):
         return ""
-    return path.read_text().replace("{module}", names["module"]).replace("{params}", describe_params(names)) + "\n\n"
+    goals = kit.meta.get("try_goal", {})
+    return (path.read_text().replace("{module}", names["module"]).replace("{params}", describe_params(names))
+            .replace("{goal}", goals.get(tests, goals.get("none", ""))) + "\n\n")
 
 
 TEST_ARMS = ("none", "first", "after", "checks")
@@ -216,6 +218,6 @@ def context(kit: Kit, names: dict, parts_dir: str, chosen: list[str], tests: str
     inline = "".join(part_text(p) for p in kit.parts if p.name in chosen)
     return (f"## Starting point\n\nI created `{shell_path(kit, names)}`, a minimal {kit.category} app that already "
             f"runs. Build the task on it: keep its structure, replace the placeholder content.\n\n"
-            f"{notes(kit, tests)}\n\n{trying(kit, names)}{checking(kit, names, tests)}{kit.cheatsheet}\n\n"
+            f"{notes(kit, tests)}\n\n{checking(kit, names, tests)}{trying(kit, names, tests)}{kit.cheatsheet}\n\n"
             f"## Parts\n\nSmall, working examples of common patterns, in `{parts_dir}`. Read one with "
             f"`cat {parts_dir}/<name>.py` when you need it; copy what fits.\n\n{index}\n{inline}")

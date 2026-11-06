@@ -20,5 +20,4 @@ notifications, then the contents of each data file. A crash prints the error.
   the same. `--kw NAME=VALUE` passes an extra App argument (e.g. a seed).
 - Example: `python .lightness/kit/try_app.py --file-text NAME='...' focus:#some-list press:down,space restart`
 
-Try what the task describes: each key in the contract, starting with no data file and with
-existing data, and a restart after a change. Compare what it prints with what the task asks for.
+{goal}

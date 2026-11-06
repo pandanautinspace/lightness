@@ -16,7 +16,7 @@
   objects to `TabbedContent(...)` (its arguments are titles) and don't mount into a TabPane from
   `on_mount` (`MountError`). Switch tabs with `self.query_one("#tabs", TabbedContent).active = "people"`.
 - `Select(options, prompt="Payer", id=...)`: `options` (a list of `(label, value)`) is required, possibly
-  `[]`; there is no `placeholder=`. Options that change: `select.set_options([...])`, then set
+  `[]` (then keep the default `allow_blank=True`: empty options with `allow_blank=False` crash); there is no `placeholder=`. Options that change: `select.set_options([...])`, then set
   `select.value` to one of them (any other value raises `InvalidSelectValueError`; `set_options`
   resets the value to `Select.NULL`, the empty value).
 - `Tree`: `tree.select_node(node)` posts `NodeSelected`, which toggles that node open/closed

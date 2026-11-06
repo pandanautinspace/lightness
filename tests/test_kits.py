@@ -862,3 +862,13 @@ def test_try_app_grid_lists_a_class_only_one_cell_has(tmp_path):
         "        self.query_one('#c1').add_class('cursor')\n")
     out = try_app(tmp_path, {"module": "g", "app_class": "G", "params": []}, "press:right", "expect:class cursor: #c1")
     assert "class cursor: #c0 (row 0, col 0)" in out and "ok: expect:class cursor: #c1" in out
+
+
+def test_try_app_tabs_line_names_how_to_switch(tmp_path):
+    (tmp_path / "t.py").write_text(
+        "from textual.app import App\nfrom textual.widgets import Static, TabbedContent, TabPane\n\n\nclass T(App):\n"
+        "    def compose(self):\n        with TabbedContent(id='tabs'):\n"
+        "            with TabPane('One', id='one'):\n                yield Static('first', id='a')\n"
+        "            with TabPane('Two', id='two'):\n                yield Static('second', id='b')\n")
+    out = try_app(tmp_path, {"module": "t", "app_class": "T", "params": []}, "click:#--content-tab-two", "expect:second")
+    assert "#tabs tabs, active='one'; switch: click:#--content-tab-two" in out and "ok: expect:second" in out

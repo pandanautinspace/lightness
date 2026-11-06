@@ -16,6 +16,9 @@ notifications, then the contents of each data file. A crash prints the error.
   `click:#id`, `focus:#id`, `wait:SECONDS` (real time), `advance:SECONDS` (moves the fake clock
   forward, then lets the app's timers run), `restart` (start again with the same files).
 - To replace what an input holds: `focus:#id press:end,ctrl+u type:NEW` (ctrl+u clears to the left).
+- To pick in a Select: `focus:#id press:enter,down,enter` (enter opens its list, down moves to the
+  next option, enter chooses); the screen then shows `#id select: VALUE`.
+- To switch tabs: `click:#--content-tab-PANE` (the screen lists them on the tabs line).
 - `--file-text NAME=TEXT` starts file parameter NAME with a file holding TEXT; `--file NAME=PATH`
   with a copy of a file. With only one file parameter, `--data TEXT` and `--data-from PATH` do
   the same. `--kw NAME=VALUE` passes an extra App argument (e.g. a seed).

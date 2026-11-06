@@ -113,7 +113,9 @@ def describe(widget) -> list[str]:
         pressed = widget.pressed_button
         return [f"{name(widget)} radio: {plain(pressed.label) if pressed else None!r}"]
     if "TabbedContent" in bases:
-        return [f"{name(widget)} tabs, active={widget.active!r}"]
+        panes = [pane.id for pane in widget.query("TabPane") if pane.id and pane.id != widget.active]
+        switch = ("; switch: " + ", ".join(f"click:#--content-tab-{p}" for p in panes)) if panes else ""
+        return [f"{name(widget)} tabs, active={widget.active!r}{switch}"]
     if "Digits" in bases:
         return [f"{name(widget)} digits: {widget.value!r}"]
     if "ProgressBar" in bases:

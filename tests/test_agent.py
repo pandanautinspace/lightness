@@ -400,3 +400,14 @@ def test_loop_says_when_thinking_was_cut_off(ws, monkeypatch):
     TranscriptAgent(client, ws, run_dir, os.environ | bench_env(), step_limit=4).run("task")
     outs = tool_outputs(client)
     assert loop_mod.THINK_CUT in outs[0] and loop_mod.THINK_CUT not in outs[1]
+
+
+def test_kit_checks_arm_reports_when_an_app_change_moves_nothing(ws):
+    checks = write("checks.txt", "count: --file-text data_path='[{\"text\": \"a\"}]' expect:\"1 notes\"\n")
+    touch = """sed -i '' 's/update("")/update(" ")/' notes.py"""
+    run_dir = ws.parent
+    env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
+    client = KitClient([checks, touch, SUBMIT, SUBMIT, "echo never"], NOTES)
+    TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("checks")], step_limit=6).run("notes app")
+    outs = tool_outputs(client)
+    assert "Still 0 of 1 checks pass: this change fixed none and broke none. Failing: count." in outs[1]

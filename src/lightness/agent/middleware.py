@@ -389,7 +389,12 @@ class Kit(Middleware):
         checks_changed = text_now != ctx.data.get("kit.checks_text")
         ctx.data["kit.checks_text"] = text_now
         if now == prev and not checks_changed:  # a rewritten checks.txt always gets a report
-            return None
+            if not app_changed:
+                return None
+            # the app changed and nothing moved: say so briefly (silence reads as "no checks ran")
+            failing = [n for n, v in now.items() if v is not None]
+            return (f"[automatic checks] Still {len(now) - len(failing)} of {len(now)} checks pass: this change "
+                    f"fixed none and broke none." + (f" Failing: {', '.join(failing)}." if failing else ""))
         if not checks_file.exists():
             # the app changed but there is no checks.txt: only the harness's own checks ran
             failing = [n for n, v in now.items() if v is not None]

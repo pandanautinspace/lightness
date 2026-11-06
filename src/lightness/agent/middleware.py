@@ -219,11 +219,16 @@ CHECKS_SHOWN, CHECK_LINES = 4, 15  # failing checks shown in full, and lines of 
 def checks_text(results: dict[str, str | None], regressions: list[str]) -> str:
     failing = {n: v for n, v in results.items() if v is not None}
     lines = [f"{len(results) - len(failing)} of {len(results)} checks pass."]
-    for n, detail in list(failing.items())[:CHECKS_SHOWN]:
+    # mistakes in a check line itself (not run) are one line each: always show them all
+    for n, detail in failing.items():
+        if detail.startswith("not run:"):
+            lines.append(f"FAIL {n}: {detail}")
+    ran = {n: v for n, v in failing.items() if not v.startswith("not run:")}
+    for n, detail in list(ran.items())[:CHECKS_SHOWN]:
         lines.append(f"FAIL {n}" + (" (passed before this change)" if n in regressions else ""))
         lines += ["  " + line for line in detail.splitlines()[-CHECK_LINES:]]
-    if len(failing) > CHECKS_SHOWN:
-        lines.append(f"Also failing: {', '.join(list(failing)[CHECKS_SHOWN:])}")
+    if len(ran) > CHECKS_SHOWN:
+        lines.append(f"Also failing: {', '.join(list(ran)[CHECKS_SHOWN:])}")
     if not failing:
         lines.append(CHECKS_ALL_PASS)
     else:

@@ -375,3 +375,10 @@ def test_kit_checks_arm_nudges_to_submit_when_idle_after_all_pass(ws):
     outs = tool_outputs(client)
     assert "All 1 checks pass" not in outs[0] and "All 1 checks pass" not in outs[1]
     assert "All 1 checks pass and the last 2 steps changed nothing" in outs[2]
+
+
+def test_checks_report_shows_every_malformed_line():
+    results = {f"bad{i}": f"not run: 'x{i}' is not a step" for i in range(6)} | {"ok": None, "run": "FAILED expect:y"}
+    text = mw.checks_text(results, [])
+    assert all(f"FAIL bad{i}: not run: 'x{i}' is not a step" in text for i in range(6))
+    assert "FAIL run\n  FAILED expect:y" in text and "Also failing" not in text

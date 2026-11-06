@@ -934,3 +934,11 @@ def test_try_app_input_line_shows_its_classes(tmp_path):
         "        event.input.set_class(not event.value.isdigit(), '-invalid')\n")
     out = try_app(tmp_path, {"module": "v", "app_class": "V", "params": []}, "focus:#n", "type:x", "expect:-invalid")
     assert "#n input: 'x' classes: -invalid" in out and "ok: expect:-invalid" in out
+
+
+def test_try_app_shows_the_title_when_there_is_a_header(tmp_path):
+    (tmp_path / "h.py").write_text(
+        "from textual.app import App\nfrom textual.widgets import Header, Static\n\n\nclass H(App):\n"
+        "    TITLE = 'Bookmark Manager'\n\n    def compose(self):\n        yield Header()\n        yield Static('x', id='s')\n")
+    out = try_app(tmp_path, {"module": "h", "app_class": "H", "params": []}, "expect:Bookmark Manager")
+    assert "title: Bookmark Manager" in out and "ok: expect:Bookmark Manager" in out

@@ -171,6 +171,9 @@ def snapshot(app) -> dict[str, list[str]]:
     screen = app.screen
     if type(screen).__name__ != "Screen":
         add("screen", [f"screen: {type(screen).__name__}"])
+    if app.screen.query("Header"):  # the Header shows the app's title (and sub-title)
+        title = app.title + (f" - {app.sub_title}" if app.sub_title else "")
+        add("title", [f"title: {title}"])
     add("focus", [f"focus: {name(app.focused) if app.focused else None}"])
 
     def visit(widget):
@@ -635,6 +638,9 @@ def lint(tokens: list[str], files: list[str] | None = None) -> list[str]:
             problems.append(f"{tok!r} is not an option (options: {', '.join(OPTIONS)})")
         elif tok == "restart":
             pass
+        elif re.search(r",(type|press|click|focus|expect|expect-not|expect-file|wait|advance):", tok):
+            problems.append(f"{tok[:50]!r}: one step per word; write steps separated by spaces (and quote text "
+                            "with spaces), e.g. type:\"My Site\" press:tab type:https://a.com")
         elif ":" not in tok or tok.split(":", 1)[0] not in STEP_NAMES:
             problems.append(f"{tok!r} is not a step: text with spaces needs quotes, e.g. type:\"two words\"")
         else:

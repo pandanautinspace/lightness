@@ -207,6 +207,8 @@ CHECKS_REFUSED = ("Not submitted yet: some checks fail. Fix the app, or a check 
                   "the task, then submit again.")
 CHECKS_MISSING = ("No checks.txt yet, so nothing checks the task's contract. Write the contract as checks in "
                   "checks.txt now (see Checks), before writing more of the app.")
+CHECKS_IDLE = ("[automatic checks] All {n} checks pass and the last {steps} steps changed nothing. If something "
+               "the task asks for isn't covered, add it as a check in checks.txt; otherwise submit now.")
 CHECKS_FAIL_HINT = ("Each check started a fresh app: it sees nothing another check did. For each failure, decide "
                     "first whether the check or the app disagrees with the task (the screen it shows is what the "
                     "app does); fix that one, not both.")
@@ -323,7 +325,25 @@ class Kit(Middleware):
                     notes.append("[automatic start check] " + text)  # only changes (never an initial "fine")
         if self.tests == "checks" and (report := self._checks(ctx)):
             notes.append(report)
+        if self.tests == "checks" and (idle := self._idle_after_pass(ctx, sig)):
+            notes.append(idle)
         return shorten_paths("\n\n".join(notes), ctx.ws, ctx.run_dir) if notes else None
+
+    def _idle_after_pass(self, ctx: Ctx, sig: str) -> str | None:
+        """Steps that change nothing while every check passes: after two, say to submit or add a check."""
+        from lightness.kits import smoke
+
+        checks = ctx.data.get("kit.checks") or {}
+        state = (sig, (ctx.ws / smoke.CHECKS_FILE).read_text() if (ctx.ws / smoke.CHECKS_FILE).exists() else None)
+        passing = bool(checks) and all(v is None for v in checks.values()) and state[1] is not None
+        if not passing or state != ctx.data.get("kit.pass_state"):
+            ctx.data["kit.pass_state"], ctx.data["kit.idle"] = (state if passing else None), 0
+            return None
+        ctx.data["kit.idle"] += 1
+        if ctx.data["kit.idle"] < 2:
+            return None
+        ctx.log("kit.idle_after_pass", steps=ctx.data["kit.idle"])
+        return CHECKS_IDLE.format(n=len(checks), steps=ctx.data["kit.idle"])
 
     def _run_checks(self, ctx: Ctx) -> dict | None:
         """Run the harness's checks and checks.txt if the app or checks.txt changed since the last run

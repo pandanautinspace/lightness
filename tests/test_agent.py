@@ -364,3 +364,14 @@ def test_kit_checks_arm_reports_after_a_checks_rewrite_with_the_same_results(ws)
     outs = tool_outputs(client)
     assert "[automatic checks] 1 of 1 checks pass." in outs[0]
     assert "[automatic checks] 1 of 1 checks pass." in outs[1]  # rewritten, same results: still reported
+
+
+def test_kit_checks_arm_nudges_to_submit_when_idle_after_all_pass(ws):
+    checks = write("checks.txt", "empty: expect-not:\"notes\"\n")
+    run_dir = ws.parent
+    env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
+    client = KitClient([checks, "ls", "cat notes.py", "ls", SUBMIT, "echo never"], NOTES)
+    TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("checks")], step_limit=6).run("notes app")
+    outs = tool_outputs(client)
+    assert "All 1 checks pass" not in outs[0] and "All 1 checks pass" not in outs[1]
+    assert "All 1 checks pass and the last 2 steps changed nothing" in outs[2]

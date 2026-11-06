@@ -616,8 +616,9 @@ NAMES: set[str] = set()
 # a compound selector (#cell-1.cursor, #a:focus, #a > b): never screen text. A bare #id is fine (the dump
 # prints "#id ..."), and so is ".word" (data often has it: "$.service", ".5"); if it is meant as a class,
 # the runtime failure says so (CLASS_LIKE).
-SELECTOR = re.compile(r"^#[\w-]+[.:\[> ]")
-CLASS_LIKE = re.compile(r"^(\.[\w-]+$|#[\w-]+[.:\[> ])")  # one bare .class, or a compound selector
+# (not "#path: '$'": a line copied from the dump, colon then space, is real screen text)
+SELECTOR = re.compile(r"^#[\w-]+(\.[\w-]|:[a-z]|\[| *> )")
+CLASS_LIKE = re.compile(r"^(\.[\w-]+$|#[\w-]+(\.[\w-]|:[a-z]|\[| *> ))")  # one bare .class, or a compound selector
 STEP_NAMES = ("type", "press", "click", "focus", "wait", "advance", "expect", "expect-not", "expect-file")
 OPTIONS = ("--file", "--file-text", "--kw", "--data", "--data-from")
 

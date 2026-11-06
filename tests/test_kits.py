@@ -964,3 +964,12 @@ def test_try_app_shows_an_empty_widget_that_has_an_id(tmp_path):
         "    def compose(self):\n        yield Static('', id='detail')\n        yield Static('')\n")
     out = try_app(tmp_path, {"module": "e", "app_class": "E", "params": []})
     assert "#detail: (empty)" in out and out.count("(empty)") == 1
+
+
+def test_lint_accepts_lines_copied_from_the_dump():
+    import shlex
+
+    from lightness.kits.tui.try_app import lint
+
+    assert lint(shlex.split("""expect:"#path: '$'" expect:"#detail:" expect:#bm-title""")) == []
+    assert all(lint([t]) for t in ["expect:#c.on", "expect:#a:focus", "expect:#a > b"])

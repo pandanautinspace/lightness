@@ -1002,3 +1002,14 @@ def test_try_app_select_line_lists_its_options(tmp_path):
         "    def compose(self):\n        yield Select([('Alice', 'a'), ('Bob', 'b')], prompt='Payer', id='payer')\n")
     out = try_app(tmp_path, {"module": "s", "app_class": "S", "params": []}, "expect:Bob")
     assert "#payer select: Select.NULL, options: Alice, Bob" in out and "ok: expect:Bob" in out
+
+
+def test_a_check_that_hangs_the_app_fails_alone(tmp_path, monkeypatch):
+    (tmp_path / "h.py").write_text(
+        "from textual.app import App\nfrom textual.widgets import Static\n\n\nclass H(App):\n"
+        "    BINDINGS = [('x', 'spin')]\n\n    def compose(self):\n        yield Static('ok', id='s')\n\n"
+        "    def action_spin(self):\n        while True:\n            pass\n")
+    (tmp_path / "checks.txt").write_text("spins: press:x expect:ok\nfine: expect:ok\n")
+    monkeypatch.setenv("TRY_CHECK_SECONDS", "3")
+    out = try_app(tmp_path, {"module": "h", "app_class": "H", "params": []}, "--checks", "checks.txt")
+    assert "FAIL spins" in out and "did not finish within" in out and "PASS fine" in out

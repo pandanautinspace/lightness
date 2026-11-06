@@ -27,8 +27,10 @@ import io
 import importlib
 import json
 import math
+import os
 import re
 import shlex
+import signal
 import shutil
 import sys
 import tempfile
@@ -413,6 +415,9 @@ def attr_hint(exc) -> str:
 
 def crash_text() -> str:
     exc = sys.exc_info()[1]
+    if type(exc).__name__ == "CheckTimeout" or "CheckTimeout" in traceback.format_exc()[-200:]:
+        return (f"  this check did not finish within {CHECK_SECONDS}s: the app hangs (an endless loop or a "
+                "wait) in the step above")
     if type(exc).__name__ == "StylesheetParseError":
         return "\n".join("  " + line for line in css_error_text(exc).splitlines())
     lines = traceback.format_exc().strip().splitlines()
@@ -692,6 +697,17 @@ def lint(tokens: list[str], files: list[str] | None = None) -> list[str]:
     return problems
 
 
+CHECK_SECONDS = int(os.environ.get("TRY_CHECK_SECONDS", "20"))
+
+
+class CheckTimeout(Exception):
+    pass
+
+
+def _check_timed_out(signum, frame):
+    raise CheckTimeout
+
+
 def file_checks(config: dict, cls, path: Path) -> list[tuple[str, str | None]]:
     """(name, None if it passed else its output) for each line of a checks file."""
     out, seen = [], {}
@@ -720,13 +736,22 @@ def file_checks(config: dict, cls, path: Path) -> list[tuple[str, str | None]]:
         OUT[0] = buf
         with contextlib.redirect_stderr(buf):
             try:
+                # each check gets its own limit, so one that hangs the app fails alone (SIGALRM also
+                # interrupts a handler stuck in a blocking loop, which an asyncio timeout can't)
+                signal.signal(signal.SIGALRM, _check_timed_out)
+                signal.alarm(CHECK_SECONDS)
                 rc = try_once(config, cls, parser().parse_args(shlex.split(rest)), stop_on_fail=True)
+            except CheckTimeout:
+                rc = 1
+                say(f"this check did not finish within {CHECK_SECONDS}s: the app hangs (an endless loop or a wait) "
+                    "at the step after the last one shown above")
             except ValueError as e:  # shlex: unbalanced quotes
                 rc = 2
                 say(f"can't split the line into steps: {e}")
             except SystemExit:  # argparse rejected an option
                 rc = 2
             finally:
+                signal.alarm(0)
                 OUT[0] = sys.stdout
         # Textual's own boxed traceback (stderr) repeats the CRASH summary below it: leave it out
         lines = [x for x in buf.getvalue().rstrip().splitlines() if not x.lstrip().startswith(("\u256d", "\u2502", "\u2570"))]

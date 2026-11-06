@@ -31,6 +31,10 @@ def is_submit(command: str) -> bool:
 # Thinking per agent step: True = the server's cap (llama-server --reasoning-budget), or a token budget
 # per request. Experiment knob (LIGHTNESS_THINK=4096): capped 8k-token thinks drafted whole apps
 # that were then cut off and thrown away.
+SERVER_THINK = 8192  # llama-server --reasoning-budget (scripts/serve.sh)
+THINK_CUT = ("[harness] Your thinking ran out of room and was cut off, so anything you drafted there (code, "
+             "a plan) is lost. Write code straight into the file with a command (cat > file <<'EOF' ...) and "
+             "let the checks tell you what's wrong, instead of working it all out in your head first.")
 THINK: bool | int = int(os.environ["LIGHTNESS_THINK"]) if os.environ.get("LIGHTNESS_THINK") else True
 
 SYSTEM = "You are a helpful assistant that can interact with a computer."
@@ -319,6 +323,13 @@ class TranscriptAgent:
             except ContextOverflow:
                 return self._end(ctx, "ContextOverflow", False)
             ctx.last_prompt_tokens = reply.usage.get("prompt_tokens") or 0
+            # thinking that ran into its budget was cut off: whatever it drafted is lost
+            budget = THINK if isinstance(THINK, int) and THINK is not True else SERVER_THINK
+            # (the thinking's own length: completion tokens also count the command, e.g. a long file;
+            # measured ~3.8 characters per thinking token on qwen35a3)
+            cut_off = len(reply.reasoning) >= budget * 3.4
+            if cut_off:
+                ctx.log("thinking_cut_off", tokens=reply.usage.get("completion_tokens"))
             if reply.reasoning:  # kept out of the transcript, saved for failure analysis
                 with (self.run_dir / "reasoning.jsonl").open("a") as f:
                     f.write(json.dumps({"step": ctx.step, "reasoning": reply.reasoning}) + "\n")
@@ -348,6 +359,9 @@ class TranscriptAgent:
                     m.before_command(ctx, command)
                 output = self.runner(command, ctx)
                 notes = [x for m in self.middleware if (x := m.after_command(ctx, command, output))]
+                if cut_off:
+                    notes.insert(0, THINK_CUT)
+                    cut_off = False
                 if SUBMIT_MARK in command:
                     notes.append(SUBMIT_HINT)
                 ctx.messages.append(self._tool(call, observation(output) + "".join("\n\n" + n for n in notes)))

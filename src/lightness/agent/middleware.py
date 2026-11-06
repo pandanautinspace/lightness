@@ -50,6 +50,8 @@ ENV_NOTES = """## Environment notes
 
 - The project is the current directory: you start in it, and `ls` shows it. Use relative paths; there is
   no /testbed, /app, /workspace or /root, and nothing to look at in /Users or your home directory.
+- Keep your thinking short and put code straight into files with a command: a long draft in your thinking
+  gets cut off and is lost. The harness runs the checks after each change and shows what's wrong.
 - Python 3.12 with textual, rich, typer, flask, httpx, pytest and the standard library is already installed.
   There is no pip and no network: never try to install anything.
 - /tmp is not writable. Put scratch files in the project directory or under $TMPDIR.

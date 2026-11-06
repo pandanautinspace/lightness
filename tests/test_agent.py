@@ -382,3 +382,21 @@ def test_checks_report_shows_every_malformed_line():
     text = mw.checks_text(results, [])
     assert all(f"FAIL bad{i}: not run: 'x{i}' is not a step" in text for i in range(6))
     assert "FAIL run\n  FAILED expect:y" in text and "Also failing" not in text
+
+
+def test_loop_says_when_thinking_was_cut_off(ws, monkeypatch):
+    from lightness.agent import loop as loop_mod
+
+    monkeypatch.setattr(loop_mod, "THINK", 100)
+
+    class LongThinker(FakeClient):
+        def chat(self, messages, **kw):
+            reply = super().chat(messages, **kw)
+            reply.reasoning = "x" * 400 if len(self.seen) == 1 else "short"
+            return reply
+
+    run_dir = ws.parent
+    client = LongThinker(["ls", "ls", SUBMIT])
+    TranscriptAgent(client, ws, run_dir, os.environ | bench_env(), step_limit=4).run("task")
+    outs = tool_outputs(client)
+    assert loop_mod.THINK_CUT in outs[0] and loop_mod.THINK_CUT not in outs[1]

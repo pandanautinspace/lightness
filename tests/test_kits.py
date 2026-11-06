@@ -841,7 +841,7 @@ def test_check_lines_are_linted_before_running(tmp_path):
     (tmp_path / "both.py").write_text(TWO_FILES)
     (tmp_path / "places.csv").write_text("ams\n")
     (tmp_path / "checks.txt").write_text(
-        'bad: type:two words press:#save expect:.on expect:""\ngood: press:a\n')
+        'bad: type:two words press:#save expect:#c.on expect:""\ngood: press:a\n')
     names = {"module": "both", "app_class": "Both",
              "params": params("places_path:input:places.csv", "saved_path:data:saved.json")}
     out = try_app(tmp_path, names, "--checks", "checks.txt")

@@ -25,10 +25,6 @@ plus three that check what is there at that point:
 - `expect-not:TEXT`: TEXT is not on the screen.
 - `expect-file:PARAM=TEXT`: the data file PARAM holds exactly TEXT (JSON is compared as values).
 
-A grid is printed row by row, each cell as its text (or its own classes when it has none), then a
-line for a class only one or two cells have, e.g. `class cursor: #cell-1-2 (row 1, col 2)`. Check a
-row by its whole printed text, e.g. `expect:". # # . ."`, and the cursor by that class line.
-
 Quote a step that has spaces: `expect:"total: 3"`. Lines starting with `#` are comments.
 
 {example}

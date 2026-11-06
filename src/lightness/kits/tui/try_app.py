@@ -336,7 +336,7 @@ def expectation(action: str, value: str, state: dict[str, list[str]], data_files
         if want.lower() in screen.lower():
             i = screen.lower().index(want.lower())
             return f"not on the screen (only with different case: {screen[i:i + len(want)]!r})"
-        if SELECTOR.match(want):
+        if CLASS_LIKE.match(want):
             return ("not on the screen: expect: matches text the screen shows, not a CSS selector; use the text "
                     "that widget shows, as the screen dump below prints it")
         return "not on the screen"
@@ -593,8 +593,11 @@ BAD_NAME = re.compile(r"^(--|(type|press|click|focus|wait|advance|restart|expect
 
 
 NAMES: set[str] = set()
-# a class or compound selector (.on, #cell-1.cursor, #a > b); a bare #id is fine: the dump prints "#id ..."
-SELECTOR = re.compile(r"^(\.[\w-]|#[\w-]+[.:\[> ])")
+# a compound selector (#cell-1.cursor, #a:focus, #a > b): never screen text. A bare #id is fine (the dump
+# prints "#id ..."), and so is ".word" (data often has it: "$.service", ".5"); if it is meant as a class,
+# the runtime failure says so (CLASS_LIKE).
+SELECTOR = re.compile(r"^#[\w-]+[.:\[> ]")
+CLASS_LIKE = re.compile(r"^(\.[\w-]|#[\w-]+[.:\[> ])")
 STEP_NAMES = ("type", "press", "click", "focus", "wait", "advance", "expect", "expect-not", "expect-file")
 OPTIONS = ("--file", "--file-text", "--kw", "--data", "--data-from")
 

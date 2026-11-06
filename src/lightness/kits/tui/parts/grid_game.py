@@ -5,6 +5,10 @@
 - Lay out cells with CSS `layout: grid; grid-size: <cols> <rows>;` and give each cell an id
   like "cell-<row>-<col>". A key-driven cursor avoids depending on mouse clicks.
 - Randomness: take a seed or a random.Random in __init__ so games are reproducible.
+- Checking it: the try command prints the grid row by row, each cell as its text (or its own classes
+  when it has none), then a line for a class only one or two cells have, e.g.
+  `class cursor: #cell-1-2 (row 1, col 2)`. Check a row by its whole printed text
+  (expect:". # # . .") and the cursor by that class line.
 """
 
 from textual.app import App, ComposeResult

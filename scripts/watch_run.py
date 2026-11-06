@@ -33,10 +33,14 @@ def summary(output: str) -> str:
     return " | ".join(out)
 
 
+FOLLOW, TOTAL = False, 0
+
+
 def main(arg: str) -> None:
     batch = Path(arg)
     run = None
     seen = 0
+    done: set = set()
     while True:
         if run is None or not (run / "steps.jsonl").exists():
             run = newest_run(batch)
@@ -51,9 +55,23 @@ def main(arg: str) -> None:
             seen = len(lines)
         if (run / "messages.json").exists():
             print(f"[{run.parent.name}] RUN ENDED after {seen} steps", flush=True)
-            return
+            if not FOLLOW:
+                return
+            done.add(run)
+            while True:  # a batch: wait for the next run to start, or the batch to finish
+                nxt = newest_run(batch)
+                if nxt not in done and nxt != run:
+                    run, seen = nxt, 0
+                    break
+                if (batch / "results.jsonl").exists() and len((batch / "results.jsonl").read_text().splitlines()) >= TOTAL:
+                    print("BATCH DONE", flush=True)
+                    return
+                time.sleep(3)
+            continue
         time.sleep(3)
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 2:  # watch_run.py BATCH_DIR N: follow every run of a batch of N runs
+        FOLLOW, TOTAL = True, int(sys.argv[2])
     main(sys.argv[1])

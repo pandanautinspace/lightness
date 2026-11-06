@@ -942,3 +942,16 @@ def test_try_app_shows_the_title_when_there_is_a_header(tmp_path):
         "    TITLE = 'Bookmark Manager'\n\n    def compose(self):\n        yield Header()\n        yield Static('x', id='s')\n")
     out = try_app(tmp_path, {"module": "h", "app_class": "H", "params": []}, "expect:Bookmark Manager")
     assert "title: Bookmark Manager" in out and "ok: expect:Bookmark Manager" in out
+
+
+def test_start_check_names_close_attributes_for_an_attribute_error(tmp_path):
+    from lightness.kits import smoke
+
+    (tmp_path / "attr.py").write_text(
+        "from textual.app import App\nfrom textual.widgets import Tree\n\n\nclass A(App):\n"
+        "    def compose(self):\n        yield Tree('root', id='t')\n\n    def on_mount(self):\n"
+        "        self.query_one(Tree).root.children_count\n")
+    bad = [r for r in smoke.tui(tmp_path, {"module": "attr", "app_class": "A", "params": []}, None) if not r.ok]
+    text = smoke.summarize(bad, "attr.py")
+    assert "hint: TreeNode has no 'children_count'. Closest names on TreeNode: children" in text
+    assert "<string>" not in text

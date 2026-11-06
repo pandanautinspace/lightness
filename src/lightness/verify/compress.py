@@ -14,6 +14,8 @@ _PYTEST_LOC = re.compile(r"^(?P<file>[^\s:]+\.py):(?P<line>\d+): (?P<err>\w+)")
 
 
 def _rel(path: str, ws: Path) -> str | None:
+    if path.startswith("<"):  # <frozen importlib...>, <string> (the harness's own snippet): not the app
+        return None
     try:
         return str(Path(path).resolve().relative_to(ws.resolve()))
     except (ValueError, OSError):

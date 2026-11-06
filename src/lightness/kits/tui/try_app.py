@@ -385,6 +385,20 @@ def not_clickable(app, selector: str) -> str | None:
     return None
 
 
+def attr_hint(exc) -> str:
+    """For an AttributeError on an object: the real names closest to the missing one."""
+    import difflib
+    obj, missing = getattr(exc, "obj", None), getattr(exc, "name", None)
+    if obj is None or not missing:
+        return ""
+    names = [n for n in dir(obj) if not n.startswith("_")]
+    close = difflib.get_close_matches(missing, names, n=6, cutoff=0.5)
+    close += [n for n in names if (missing.split("_")[0] in n or n in missing) and n not in close][:6 - len(close)]
+    kind = type(obj).__name__
+    return (f"{kind} has no {missing!r}. Closest names on {kind}: {', '.join(close)}" if close
+            else f"{kind} has no {missing!r}. Its public names: {', '.join(names[:40])}")
+
+
 def crash_text() -> str:
     exc = sys.exc_info()[1]
     if type(exc).__name__ == "StylesheetParseError":
@@ -392,7 +406,8 @@ def crash_text() -> str:
     lines = traceback.format_exc().strip().splitlines()
     ours = [i for i, line in enumerate(lines) if 'File "' in line and "site-packages" not in line and "try_app" not in line]
     keep = lines[ours[-1]:] if ours else lines[-3:]
-    return "\n".join("  " + line for line in keep[-6:])
+    hint = attr_hint(exc) if isinstance(exc, AttributeError) else ""
+    return "\n".join("  " + line for line in keep[-6:] + ([f"hint: {hint}"] if hint else []))
 
 
 async def run(cls, kw, data_files: dict[str, Path], clock: FakeClock | None, steps, stop_on_fail=False) -> int:

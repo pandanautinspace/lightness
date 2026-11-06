@@ -824,3 +824,14 @@ def test_try_app_says_when_a_click_would_miss(tmp_path):
     assert "#cancel can't be clicked" in out and "cut off by its container" in out
     out = try_app(tmp_path, names, "press:q", "click:#save")
     assert "got save" in out
+
+
+def test_checks_file_rejects_duplicate_names(tmp_path):
+    (tmp_path / "both.py").write_text(TWO_FILES)
+    (tmp_path / "places.csv").write_text("ams\n")
+    (tmp_path / "checks.txt").write_text("CHECK: press:a\nCHECK: press:b\nother: press:a\n")
+    names = {"module": "both", "app_class": "Both",
+             "params": params("places_path:input:places.csv", "saved_path:data:saved.json")}
+    out = try_app(tmp_path, names, "--checks", "checks.txt")
+    assert "FAIL line 2\n    the name 'CHECK' is already used on line 1" in out
+    assert "PASS CHECK" in out and "PASS other" in out and "of 3 checks pass" in out

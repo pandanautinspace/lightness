@@ -574,12 +574,17 @@ BAD_NAME = re.compile(r"^(--|(type|press|click|focus|wait|advance|restart|expect
 
 def file_checks(config: dict, cls, path: Path) -> list[tuple[str, str | None]]:
     """(name, None if it passed else its output) for each line of a checks file."""
-    out = []
+    out, seen = [], {}
     for n, line in enumerate(path.read_text().splitlines(), 1):
         line = line.strip()
         if not line or line.startswith("#"):
             continue
         name, sep, rest = line.partition(": ")
+        if sep and name.strip() in seen:
+            out.append((f"line {n}", f"the name {name.strip()!r} is already used on line {seen[name.strip()]}: give "
+                        "each check its own name (it is how the report tells them apart)"))
+            continue
+        seen.setdefault(name.strip(), n)
         if not sep or BAD_NAME.match(name.strip()):
             out.append((f"line {n}", f"not a check: {line[:80]!r}. A check line is a short name of your own, then "
                         "': ', then the steps, e.g.\n    typing marks it modified: type:hello expect:modified"))

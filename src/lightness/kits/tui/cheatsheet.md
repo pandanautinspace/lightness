@@ -41,5 +41,8 @@
   `:even`/`:odd`, `:first-child`, `:last-child` (no `:focused`, `:active`, `:selected`, `:checked`).
   A highlighted list item has class `-highlight` (`ListItem.-highlight`). Units: `fr`, `%`, `auto`,
   cells (no `px`); `layout: horizontal | vertical | grid`. Invalid CSS crashes the app at start.
+  No `font-size`, `font-weight`, `display: flex` or `align-self`: bold is `text-style: bold`,
+  centring is `content-align: center middle` (a widget's text) or `align: center middle` (a
+  container's children), and big numbers are the `Digits` widget, not a font size.
 - Headless tests: `async with app.run_test() as pilot:` → `await pilot.press("a", "enter")`,
   `await pilot.click("#id")`, `await pilot.pause()`. No pytest-asyncio: wrap in `asyncio.run(...)`.

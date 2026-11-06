@@ -4,6 +4,7 @@ against the bare baseline; keep only what helps.
 
 import hashlib
 import json
+import re
 from pathlib import Path
 
 from lightness.agent.loop import Ctx, Middleware
@@ -204,6 +205,8 @@ TESTS_AFTER = ("Not submitted yet. Before submitting: write tests for the task's
 
 CHECKS_REFUSED = ("Not submitted yet: some checks fail. Fix the app, or a check in checks.txt that disagrees with "
                   "the task, then submit again.")
+CHECKS_MISSING = ("No checks.txt yet, so nothing checks the task's contract. Write the contract as checks in "
+                  "checks.txt now (see Checks), before changing the app again.")
 CHECKS_ALL_PASS = "If checks.txt covers every item of the task's contract, submit now; otherwise add the missing checks."
 CHECKS_SHOWN, CHECK_LINES = 4, 15  # failing checks shown in full, and lines of each
 
@@ -247,9 +250,11 @@ class Kit(Middleware):
         spec = ctx.data.get("spec")
         task = ctx.task + (("\n\n" + render(spec)) if spec else "")
         try:
-            kind = ctx.client.decide([{"role": "user", "content": (
+            # the task naming the toolkit settles it (the 35B once called a Textual CSV browser "cli"
+            # because it takes a file argument); otherwise the model decides
+            kind = "tui" if re.search(r"\btextual\b", task, re.IGNORECASE) else ctx.client.decide([{"role": "user", "content": (
                 "What kind of program does this request ask for?\n"
-                "- tui: an interactive terminal app (full-screen, keys)\n"
+                "- tui: an interactive terminal app (full-screen, keys), even one started with a file argument\n"
                 "- cli: a command-line tool that runs once and exits\n"
                 "- data-script: a script that reads, transforms or loads data files\n"
                 "- webapp: a web app or HTTP API\n"
@@ -349,8 +354,10 @@ class Kit(Middleware):
                 failing=[n for n, v in now.items() if v is not None], regressions=regressions)
         if now == prev:
             return None
-        if prev is None and all(v is None for v in now.values()) and not (ctx.ws / smoke.CHECKS_FILE).exists():
-            return None  # only the harness's checks, all passing: nothing to say yet
+        if not (ctx.ws / smoke.CHECKS_FILE).exists():
+            # the app changed but there is no checks.txt: only the harness's own checks ran
+            failing = [n for n, v in now.items() if v is not None]
+            return "[automatic checks] " + (checks_text(now, regressions) + "\n" if failing else "") + CHECKS_MISSING
         return "[automatic checks] " + checks_text(now, regressions)
 
     def on_submit(self, ctx: Ctx) -> str | None:

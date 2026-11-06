@@ -341,3 +341,14 @@ def test_submit_accepts_a_cd_prefix_and_explains_near_misses(ws):
     res = a.run("submit")
     assert res.submitted and res.steps == 2
     assert tool_outputs(client)[0].endswith(SUBMIT_HINT)
+
+
+def test_kit_checks_arm_asks_for_checks_when_the_app_changes_without_them(ws):
+    show_count = """sed -i '' 's/update("")/update("x")/' notes.py"""
+    run_dir = ws.parent
+    env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
+    client = KitClient([show_count, SUBMIT, "echo never"], NOTES)
+    client.answers["kit.classify"] = {"kind": "cli"}  # a task naming Textual is a tui whatever the model says
+    TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("checks")], step_limit=4).run("a Textual notes app")
+    outs = tool_outputs(client)
+    assert mw.CHECKS_MISSING in outs[0]

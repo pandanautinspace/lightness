@@ -701,3 +701,19 @@ def test_checks_example_uses_the_apps_file_params():
     data = checks_example({"params": [{"name": "data_path", "role": "data", "file": "notes.json"}]})
     assert "expect-file:data_path=" in data and "--file-text data_path=" in data
     assert "--file-text" not in checks_example({"params": []})
+
+
+def test_fill_input_files_uses_the_projects_data_file(tmp_path):
+    from lightness.kits import fill_input_files
+
+    (tmp_path / "books.csv").write_text("a\n")
+    (tmp_path / "browse.py").write_text("")
+    names = {"params": [{"name": "csv_path", "role": "input", "file": ""}]}
+    assert fill_input_files(names, tmp_path)["params"][0]["file"] == "books.csv"
+    names = {"params": [{"name": "csv_path", "role": "input", "file": "data.csv"}]}  # missing default, same ext
+    assert fill_input_files(names, tmp_path)["params"][0]["file"] == "books.csv"
+    (tmp_path / "other.json").write_text("{}")
+    names = {"params": [{"name": "p", "role": "input", "file": ""}]}  # two candidates: leave it
+    assert fill_input_files(names, tmp_path)["params"][0]["file"] == ""
+    names = {"params": [{"name": "p", "role": "data", "file": "saved.json"}]}  # data files are the app's own
+    assert fill_input_files(names, tmp_path)["params"][0]["file"] == "saved.json"

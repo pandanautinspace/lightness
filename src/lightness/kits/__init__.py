@@ -95,6 +95,23 @@ def file_params(names: dict) -> list[dict]:
     return [p for p in names.get("params") or [] if p["role"] in FILE_ROLES]
 
 
+def fill_input_files(names: dict, ws: Path) -> dict:
+    """An input parameter whose file the project doesn't have (the contract gave no default, e.g.
+    `python app.py FILE.csv`) takes the project's own data file: the only one with the same
+    extension, or the only non-code file. The try command and checks then start with it."""
+    found = [f.name for f in sorted(ws.iterdir()) if f.is_file() and not f.name.startswith(".")
+             and f.suffix not in (".py", ".md", ".toml", ".cfg", ".ini")]
+    for p in names.get("params") or []:
+        if p["role"] != "input" or (p.get("file") and (ws / p["file"]).is_file()):
+            continue
+        ext = Path(p.get("file") or "").suffix
+        same = [f for f in found if ext and f.endswith(ext)]
+        pick = same if len(same) == 1 else (found if len(found) == 1 else [])
+        if pick:
+            p["file"] = pick[0]
+    return names
+
+
 def default_file(param: dict) -> str:
     return param.get("file") or ("data.json" if param["role"] == "data" else "input.txt")
 

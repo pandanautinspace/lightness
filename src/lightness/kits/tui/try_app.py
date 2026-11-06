@@ -26,6 +26,7 @@ import io
 import importlib
 import json
 import math
+import re
 import shlex
 import shutil
 import sys
@@ -509,6 +510,10 @@ def try_once(config: dict, cls, a, stop_on_fail=False) -> int:
 DETAIL = 30  # lines of a failing check's output shown
 
 
+# a name that is really a step or an option: the steps were written where the name goes
+BAD_NAME = re.compile(r"^(--|(type|press|click|focus|wait|advance|restart|expect|expect-not|expect-file)(:|$))")
+
+
 def file_checks(config: dict, cls, path: Path) -> list[tuple[str, str | None]]:
     """(name, None if it passed else its output) for each line of a checks file."""
     out = []
@@ -517,8 +522,9 @@ def file_checks(config: dict, cls, path: Path) -> list[tuple[str, str | None]]:
         if not line or line.startswith("#"):
             continue
         name, sep, rest = line.partition(": ")
-        if not sep:
-            out.append((f"line {n}", "a check line starts with its name and ': ' (NAME: [options] STEP ...)"))
+        if not sep or BAD_NAME.match(name.strip()):
+            out.append((f"line {n}", f"not a check: {line[:80]!r}. A check line is a short name of your own, then "
+                        "': ', then the steps, e.g.\n    typing marks it modified: type:hello expect:modified"))
             continue
         buf = io.StringIO()
         OUT[0] = buf

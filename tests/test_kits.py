@@ -671,7 +671,7 @@ def test_try_app_checks_file(tmp_path):
     out = try_app(tmp_path, COUNTER, "--checks", "checks.txt")
     assert "PASS bump\n" in out
     assert "FAIL wrong\n" in out and "FAILED expect:count 9" in out and "after press:plus:\n      #shown: 'count 1'" in out
-    assert "FAIL line 5\n    a check line starts with its name" in out
+    assert "FAIL line 5\n    not a check:" in out
     assert "FAIL quotes\n    can't split the line into steps" in out
     assert "FAIL bad option\n" in out
     assert out.strip().endswith("1 of 5 checks pass")
@@ -768,3 +768,13 @@ def test_try_app_focuses_dialog_widgets_and_shows_sqlite(tmp_path):
     assert "SQLite: table items: ('milk',)" in out
     out = try_app(tmp_path, names, "--file-text", "db_path=[]")
     assert "db_path is a SQLite database: --file-text can't fill it" in out
+
+
+def test_checks_file_rejects_steps_written_as_the_name(tmp_path):
+    (tmp_path / "both.py").write_text(TWO_FILES)
+    (tmp_path / "checks.txt").write_text("type:hello world: expect:modified\ntype: again: expect:x\nok one: press:a\n")
+    names = {"module": "both", "app_class": "Both",
+             "params": params("places_path:input:places.csv", "saved_path:data:saved.json")}
+    out = try_app(tmp_path, names, "--checks", "checks.txt")
+    assert out.count("not a check:") == 2 and "typing marks it modified: type:hello" in out
+    assert "FAIL line 1\n" in out and "FAIL line 2\n" in out and "line 3" not in out  # a real check runs

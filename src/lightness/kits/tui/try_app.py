@@ -584,13 +584,28 @@ DETAIL = 30  # lines of a failing check's output shown
 BAD_NAME = re.compile(r"^(--|(type|press|click|focus|wait|advance|restart|expect|expect-not|expect-file)(:|$))")
 
 
+NAMES: set[str] = set()
 STEP_NAMES = ("type", "press", "click", "focus", "wait", "advance", "expect", "expect-not", "expect-file")
 OPTIONS = ("--file", "--file-text", "--kw", "--data", "--data-from")
+
+
+def key_names() -> set[str]:
+    from textual import keys
+    return ({k.value for k in keys.Keys} | set(keys.KEY_ALIASES) | {"space", "enter", "tab", "escape"}
+            | {keys._character_to_key(chr(c)) for c in range(33, 127)})
+
+
+def valid_key(key: str, names: set[str]) -> bool:
+    while "+" in key[:-1] and key.split("+", 1)[0] in ("ctrl", "shift", "alt", "meta", "super"):
+        key = key.split("+", 1)[1]
+    return len(key) == 1 or key in names
 
 
 def lint(tokens: list[str]) -> list[str]:
     """Every mistake in one check's steps that can be seen without running it."""
     problems, i = [], 0
+    global NAMES
+    NAMES = NAMES or key_names()
     while i < len(tokens):
         tok = tokens[i]
         opt = tok.split("=", 1)[0]
@@ -611,6 +626,11 @@ def lint(tokens: list[str]) -> list[str]:
                 problems.append(f"{tok!r}: expect matches text on the screen, not a selector")
             elif action == "press" and value.startswith("#"):
                 problems.append(f"{tok!r}: press takes key names; to press a button, click:{value}")
+            elif action == "press" and (bad := [k for k in value.split(",") if k.strip() and not valid_key(k.strip(), NAMES)]):
+                problems.append(f"{tok!r}: {', '.join(map(repr, bad))} is not a key (keys: a, enter, tab, escape, space, up, "
+                                f"ctrl+s, ...; to press a button, click:#id)")
+            elif re.search(r",(type|press|click|focus|expect|expect-not|expect-file|wait|advance):", value):
+                problems.append(f"{tok!r}: one step per word; write steps separated by spaces, e.g. type:a press:tab type:b")
         i += 1
     return problems
 

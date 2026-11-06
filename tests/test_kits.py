@@ -893,3 +893,13 @@ def test_file_option_with_text_instead_of_a_path_fails_only_that_check(tmp_path)
     out = try_app(tmp_path, names, "--checks", "checks.txt")
     assert "there is no file 'a,b'. To give the contents, use --file-text places_path=" in out
     assert "PASS fine" in out and "could not run" not in out
+
+
+def test_lint_rejects_unknown_keys_and_glued_steps():
+    import shlex
+
+    from lightness.kits.tui.try_app import lint
+
+    assert "'bm-save' is not a key" in " ".join(lint(shlex.split("press:bm-save")))
+    assert "one step per word" in " ".join(lint(shlex.split("type:A,type:B")))
+    assert lint(shlex.split('press:ctrl+s,enter press:comma press:shift+tab type:"a,b" press:down,space')) == []

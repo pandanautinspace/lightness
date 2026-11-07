@@ -458,3 +458,87 @@ Per task, spec · intent: json-viewer 10/10 · 0/3 vs 10/10 · 2/3; loan-calc 11
   tests, so this is the first time the score has moved. It is still 1 run per task.
 - The fresh none run was faster than the earlier one (574 s vs 799 s) and had no blown runs.
   The earlier run had a ContextOverflow and a TimeExceeded; the `advance` fix likely helped.
+
+### Single-run iteration on the local 35B, checks arm, 2026-11-05/06
+
+Method (replaces full benches until runs are consistent): run one task live, watch each step
+with `scripts/watch_run.py BATCH [N]`, and stop as soon as the model is stuck for 3 or more
+steps. Fix what made it stuck (in the harness, kit text or try_app, never tuned to that
+task), commit, then run a *different* task. A full bench comes only once every task completes
+cleanly and efficiently. Command:
+
+    LIGHTNESS_THINK=4096 .venv/bin/python -m lightness.bench.run --agent mw:env,guard,kit \
+      --suite kit-tui --model qwen35a3 --tests checks --tasks TASK --runs 1
+
+`LIGHTNESS_THINK` caps thinking per step (default: the server's 8192); 4096 was used from
+`d038b54` on.
+
+**Pass 1** (`c487024` → `4335020`, about 28 stopped runs): every task was run until it
+finished without a stall, fixing as it went. **Pass 2** (`eee5787` → `3d0c884`): all 9 tasks
+again on the fixed code, to see whether they now finish first time. Final runs of pass 2:
+
+| task | spec | intent | wall s | steps | app rewrites | thinking cut off |
+|---|---|---|---|---|---|---|
+| airport-lookup | 11/11 | 0/3 | 134 | 8 | 2 | 0 |
+| bookmarks | 11/11 | 0/3 | 753 | 15 | 4 | 1 |
+| csv-browser | 7/11 | 0/3 | 155 | 9 | 3 | 0 |
+| json-viewer | 10/10 | 1/3 | 597 | 17 | 5 | 1 |
+| lights-out | 8/9 | 0/3 | 1086 | 28 | 4 | 1 |
+| loan-calc | 11/11 | 1/3 | 254 | 7 | 1 | 0 |
+| notepad | 11/11 | 0/2 | 256 | 8 | 1 | 0 |
+| stopwatch | 6/8 | 0/3 | 711 | 10 | 5 | 1 |
+| trip-split | 11/11 | 1/3 | 708 | 12 | 3 | 1 |
+| **total** | **86/93** | **3/26** | **4654** | 114 | 28 | 5 |
+
+All 9 submitted, none at a limit. Pass 1's final runs scored 88/93 spec, 3/26 intent, in
+3313 s; each of those was the run right after that task's fixes. Only 5 of 9 tasks finished
+first time in pass 2: json-viewer was stopped 4 times, trip-split twice, notepad and
+stopwatch once each, each for a new stall that was then fixed (`4335020` … `3d0c884`).
+
+**What made the 35B stuck** (one or more stopped runs each; the fix is in the commit log):
+
+- *Wrong picture of the task.* A task naming Textual classified as a cli app; a file
+  argument read as a data file when it was input (or the reverse); no `input.txt` to try the
+  app with. Fixes: Textual in the task means tui; role help in kit.toml; `fill_input_files`.
+- *Checks it could not write.* Quoting, steps glued with commas, a step used as the check
+  name, `press:#id` instead of `click:#id`, unknown keys, file options naming a parameter the
+  app doesn't have, `--file` given text instead of a path, `\n` inside `--file-text`. Fix:
+  every line is linted before it runs, all mistakes are listed at once, each with the
+  correct form. Three lint rules were too strict at first (bare `#id`, `.word`, lines copied
+  from the dump) and made the model write workarounds; the rules now reject only real
+  selectors.
+- *State it could not see.* The dump didn't show Input classes (validity), empty widgets,
+  Select options, the title, which grid cell had the cursor, tree rows, how to switch tabs,
+  or SQLite contents. Each is now one line of the dump. A key that only moved a list cursor
+  now says so.
+- *Textual API guesses* (Tree `select_node` toggles, Select `placeholder`, TabPane mounting,
+  `widget.classes.add`, `event.node`, web CSS, `ctrl+end` in TextArea, DataTable columns).
+  Each guess cost 3+ steps of crash and retry. Fix: a cheat-sheet line checked against the
+  installed Textual, plus readable errors: CSS errors show the bad line, an AttributeError
+  lists the closest real names, and the start check lists every undefined name at once (ruff
+  F821) instead of one crash per run.
+- *Silence and loops.* An app change that moved no check got no report, so the model
+  rewrote again; after all checks passed it kept running try_app by hand. Fixes: a one-line
+  "fixed none, broke none" report, and after two such changes a pointer to suspect the checks
+  themselves; nudges after three try commands in a row and after idle steps once all pass;
+  a missing `checks.txt` is asked for before more app code.
+- *A check that hangs* (an app stuck in a handler) used to time out the whole checks run.
+  Fix: each check has its own 20 s limit (`TRY_CHECK_SECONDS`).
+- *Lost thinking.* With an 8192-token budget the model drafted whole apps in its thinking,
+  was cut off, and started again. Fixes: `LIGHTNESS_THINK=4096`, an env note to write code
+  straight into files, and a harness note when thinking was cut off.
+
+**Where the time goes now.** Steps are few (median 10) but slow: about 50 s each, all of it
+output. Across pass 2, thinking was 49% of output characters (219k) and commands 51%
+(228k), and the commands are mostly whole-file rewrites: 28 app rewrites and about 37
+`checks.txt` rewrites, no `sed` or patch edits at all. 5 of 9 runs still had thinking cut off
+at 4096 tokens despite the note. The slow tasks (lights-out, bookmarks, trip-split,
+stopwatch, json-viewer) are the ones that rewrote the app 3–5 times.
+
+**Not yet fixed:** csv-browser loses 4 spec tests and stopwatch 2 with every check
+passing, so their checks miss something the contract says; intent stays at about 1 in 9.
+
+**Next:** speed experiments, one variable at a time on 2–3 of the slow tasks: (1)
+`LIGHTNESS_THINK=2048`; (2) steer edits toward small in-place changes instead of whole-file
+rewrites. Then a third consistency pass over all 9, and the full 9 × 3 bench only once a
+pass finishes every task first time.

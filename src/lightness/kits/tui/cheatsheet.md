@@ -46,6 +46,8 @@
   `self.push_screen(Ask(), callback)`. `push_screen_wait` only works inside an `@work` worker.
 - Timers: `self.set_interval(seconds, fn, pause=False)` returns a `Timer` (`.pause()`, `.resume()`).
 - Threads: `@work(thread=True, exclusive=True)`; update widgets via `self.call_from_thread(fn, ...)`.
+- Change what a `Static` or `Label` shows with `widget.update("new text")`; read it back as `widget.content`.
+  There is no `.text`: assigning `widget.text = ...` raises no error and changes nothing on screen.
 - `self.notify(text, severity="error", markup=False)` for messages containing user data.
 - Don't name attributes after Textual's own (`visible`, `display`, `size`, `region`, `children`,
   `parent`, `name`, `id`, `classes`, `styles`, `screen`, `app`): it breaks the widget.

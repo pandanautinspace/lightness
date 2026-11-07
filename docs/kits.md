@@ -470,7 +470,7 @@ cleanly and efficiently. Command:
     LIGHTNESS_THINK=4096 .venv/bin/python -m lightness.bench.run --agent mw:env,guard,kit \
       --suite kit-tui --model qwen35a3 --tests checks --tasks TASK --runs 1
 
-`LIGHTNESS_THINK` caps thinking per step (default: the server's 8192); 4096 was used from
+`scripts/run_stats.py BATCH...` prints the per-run numbers below. `LIGHTNESS_THINK` caps thinking per step (default: the server's 8192); 4096 was used from
 `d038b54` on.
 
 **Pass 1** (`c487024` → `4335020`, about 28 stopped runs): every task was run until it

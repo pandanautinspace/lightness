@@ -213,8 +213,10 @@ CHECKS_SUSPECT = ("Two app changes in a row fixed none of them, so suspect the c
                   "against the task (is the expected text right, in the task's format? do its steps first do what "
                   "the result needs, e.g. start the timer before time passes?) and fix the check if it is wrong.")
 TRIES_NUDGE = ("[automatic checks] That's three try commands in a row with no change to the app or checks.txt. "
-               "What you are verifying by hand belongs in checks.txt (each line runs after every change); "
-               "otherwise change the app.")
+               "Put what you learned into checks.txt now (fix the checks that were wrong, add what you were "
+               "verifying by hand: each line runs after every change), or change the app.")
+TRIES_AGAIN = ("[automatic checks] {n} try commands in a row with nothing changed. Stop exploring: write what you "
+               "have seen into checks.txt, or change the app.")
 CHECKS_IDLE = ("[automatic checks] All {n} checks pass and the last {steps} steps changed nothing. If something "
                "the task asks for isn't covered, add it as a check in checks.txt; otherwise submit now.")
 CHECKS_FAIL_HINT = ("Each check started a fresh app: it sees nothing another check did. For each failure, decide "
@@ -363,10 +365,12 @@ class Kit(Middleware):
             ctx.data["kit.try_state"], ctx.data["kit.tries"] = state, (1 if "try_app" in command else 0)
             return None
         ctx.data["kit.tries"] += 1
-        if ctx.data["kit.tries"] != 3:
+        n = ctx.data["kit.tries"]
+        if n < 3:
             return None
-        ctx.log("kit.tries_in_a_row", tries=3)
-        return TRIES_NUDGE
+        ctx.log("kit.tries_in_a_row", tries=n)
+        # said once, the 35B kept exploring tree keys one try at a time (json-viewer): repeat it, briefly
+        return TRIES_NUDGE if n == 3 else TRIES_AGAIN.format(n=n)
 
     def _idle_after_pass(self, ctx: Ctx, sig: str) -> str | None:
         """Steps that change nothing while every check passes: after two, say to submit or add a check."""

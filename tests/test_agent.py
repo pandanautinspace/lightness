@@ -429,6 +429,7 @@ def test_kit_checks_arm_nudges_after_three_tries_in_a_row(ws):
     TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("checks")], step_limit=8).run("notes app")
     outs = tool_outputs(client)
     assert mw.TRIES_NUDGE not in outs[1] + outs[2] and mw.TRIES_NUDGE in outs[3] and mw.TRIES_NUDGE not in outs[4]
+    assert "4 try commands in a row with nothing changed" in outs[4]
 
 
 def test_kit_checks_arm_suspects_the_checks_after_two_ineffective_app_changes(ws):

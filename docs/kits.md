@@ -528,15 +528,16 @@ stopwatch once each, each for a new stall that was then fixed (`4335020` … `3d
   was cut off, and started again. Fixes: `LIGHTNESS_THINK=4096`, an env note to write code
   straight into files, and a harness note when thinking was cut off.
 
-**Where the time goes now.** Steps are few (median 10) but slow: about 50 s each, all of it
+**Where the time goes now.** Steps are few (median 10) but slow: about 40 s each, nearly all of it
 output. Across pass 2, thinking was 49% of output characters (219k) and commands 51%
 (228k), and the commands are mostly whole-file rewrites: 28 app rewrites and about 37
 `checks.txt` rewrites, no `sed` or patch edits at all. 5 of 9 runs still had thinking cut off
 at 4096 tokens despite the note. The slow tasks (lights-out, bookmarks, trip-split,
 stopwatch, json-viewer) are the ones that rewrote the app 3–5 times.
 
-**Not yet fixed:** csv-browser loses 4 spec tests and stopwatch 2 with every check
-passing, so their checks miss something the contract says; intent stays at about 1 in 9.
+**Not yet looked at:** csv-browser lost 4 spec tests and stopwatch 2 although both
+submitted normally, so their checks miss something the contract asks for; intent stays at
+about 1 in 9.
 
 **Next:** speed experiments, one variable at a time on 2–3 of the slow tasks: (1)
 `LIGHTNESS_THINK=2048`; (2) steer edits toward small in-place changes instead of whole-file

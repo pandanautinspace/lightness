@@ -44,8 +44,11 @@
   `"move(-1, 0)"`. `ctrl+q` quits by default; `ctrl+c` does not.
 - Modals: `class Ask(ModalScreen[bool])` … `self.dismiss(result)`; open with
   `self.push_screen(Ask(), callback)`. `push_screen_wait` only works inside an `@work` worker.
+  The callback may be `async def` (Textual awaits it), so it can `await self.refresh_view()`.
 - Timers: `self.set_interval(seconds, fn, pause=False)` returns a `Timer` (`.pause()`, `.resume()`).
-- Threads: `@work(thread=True, exclusive=True)`; update widgets via `self.call_from_thread(fn, ...)`.
+- Threads: `@work(thread=True, exclusive=True)`; update widgets via `self.call_from_thread(fn, ...)`, and only
+  inside such a thread worker: handlers, timers and push_screen callbacks already run on the app's thread
+  (`call_from_thread` there raises RuntimeError), so call the function directly, or `await` it if async.
 - Change what a `Static` or `Label` shows with `widget.update("new text")`; read it back as `widget.content`.
   There is no `.text`: assigning `widget.text = ...` raises no error and changes nothing on screen.
 - `self.notify(text, severity="error", markup=False)` for messages containing user data.

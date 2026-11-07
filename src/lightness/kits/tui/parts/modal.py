@@ -3,6 +3,9 @@
 - Subclass ModalScreen[ResultType]; close it with self.dismiss(result).
 - Open it with self.push_screen(Screen(), callback); the callback gets the result.
   (push_screen_wait only works inside an @work worker; the callback form works anywhere.)
+- The callback may be `async def` (Textual awaits it): use that when it calls an async method,
+  e.g. `await self.refresh_view()` after a list's `await lv.clear()`. The callback runs on the
+  app's own thread: never `call_from_thread` there.
 - Escape-to-cancel: a binding ("escape", "cancel") whose action dismisses with None/False.
 - While a modal is open, keys go to the modal, not to the app's bindings.
 """
@@ -78,7 +81,7 @@ class ModalApp(App):
         yield Static(self.title_text, id="title")
 
     def action_edit(self) -> None:
-        def done(value: str | None) -> None:
+        async def done(value: str | None) -> None:  # async: it could `await self.refresh_view()`
             if value is not None:
                 self.title_text = value
                 self.query_one("#title", Static).update(value)

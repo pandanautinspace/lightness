@@ -1,8 +1,10 @@
 """Speed numbers for finished runs: python scripts/run_stats.py BATCH_OR_RUN_DIR ...
 
 One line per task run: result, wall time, steps, output tokens, app and checks.txt rewrites,
-in-place edits (sed/patch/python), try commands, steps whose thinking was cut off, and how
-output splits between thinking and commands. A batch dir expands to every run under it."""
+in-place edits (sed/patch/python), try commands, steps whose thinking was cut off, how output
+splits between thinking and commands, and the agent calls' decode speed (tok/s) and generation
+seconds. Decode speed roughly halves on battery in Low Power Mode, so compare wall times only
+between runs at a similar tok/s (or compare output tokens). A batch dir expands to every run under it."""
 
 import json
 import sys
@@ -38,6 +40,10 @@ def main(paths: list[str]) -> None:
         if (run / "reasoning.jsonl").exists():
             think = sum(len(json.loads(line).get("reasoning") or "") for line in (run / "reasoning.jsonl").read_text().splitlines())
         cmd = sum(len(s["command"]) for s in steps)
+        calls = [json.loads(line) for line in (run / "calls.jsonl").read_text().splitlines()] if (run / "calls.jsonl").exists() else []
+        agent = [c for c in calls if c.get("purpose") == "agent" and c.get("predicted_ms")]
+        gen = sum(c["predicted_ms"] for c in agent) / 1000
+        speed = sum(c["completion_tokens"] for c in agent) / gen if gen else 0
         r = result(run)
         score = (f"spec {r['tests_passed'] - r.get('intent_passed', 0)}/{r['tests_total'] - r.get('intent_total', 0)}"
                  f" intent {r.get('intent_passed')}/{r.get('intent_total')}") if r else "no result (stopped)"
@@ -45,7 +51,7 @@ def main(paths: list[str]) -> None:
         out = r.get("completion_tokens", "?")
         print(f"{run.parent.name[4:]:15} {r.get('exit_status', '-'):10} {score:24} wall={wall:5}s steps={len(steps):3} "
               f"out_tok={out} app_rewrites={app} checks_writes={checks} edits={edits} tries={tries} think_cut={cut} "
-              f"think/cmd_chars={think}/{cmd}")
+              f"think/cmd_chars={think}/{cmd} gen_s={gen:.0f} tok/s={speed:.0f}")
 
 
 if __name__ == "__main__":

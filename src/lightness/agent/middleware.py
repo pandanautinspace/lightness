@@ -221,12 +221,21 @@ CHECKS_FAIL_HINT = ("Each check started a fresh app: it sees nothing another che
                     "first whether the check or the app disagrees with the task (the screen it shows is what the "
                     "app does); fix that one, not both.")
 CHECKS_ALL_PASS = "If checks.txt covers every item of the task's contract, submit now; otherwise add the missing checks."
+CHECKS_NOT_RUN = ("{k} of them did not run: their own lines in checks.txt have a mistake (shown below). No change "
+                  "to the app can fix those; fix the lines in checks.txt first.")
 CHECKS_SHOWN, CHECK_LINES = 4, 15  # failing checks shown in full, and lines of each
+
+
+def not_run(results: dict[str, str | None]) -> list[str]:
+    """Checks whose line has a mistake, so they never ran (the try command's lint)."""
+    return [n for n, v in results.items() if v is not None and v.startswith("not run:")]
 
 
 def checks_text(results: dict[str, str | None], regressions: list[str]) -> str:
     failing = {n: v for n, v in results.items() if v is not None}
     lines = [f"{len(results) - len(failing)} of {len(results)} checks pass."]
+    if k := len(not_run(results)):  # a bare count read as "the app fails these" and the 35B rewrote the app
+        lines[0] += " " + CHECKS_NOT_RUN.format(k=k)
     # mistakes in a check line itself (not run) are one line each: always show them all
     for n, detail in failing.items():
         if detail.startswith("not run:"):
@@ -421,6 +430,8 @@ class Kit(Middleware):
             ctx.data["kit.no_effect"] = ctx.data.get("kit.no_effect", 0) + 1
             text = (f"[automatic checks] Still {len(now) - len(failing)} of {len(now)} checks pass: this change "
                     f"fixed none and broke none." + (f" Failing: {', '.join(failing)}." if failing else ""))
+            if k := len(not_run(now)):
+                text += " " + CHECKS_NOT_RUN.format(k=k)
             if failing and ctx.data["kit.no_effect"] >= 2:
                 text += " " + CHECKS_SUSPECT
             return text

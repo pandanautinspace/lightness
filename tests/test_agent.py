@@ -384,6 +384,13 @@ def test_checks_report_shows_every_malformed_line():
     assert "FAIL run\n  FAILED expect:y" in text and "Also failing" not in text
 
 
+def test_checks_report_says_malformed_lines_need_fixing_not_the_app():
+    results = {"bad": "not run: 'Site' is not a step", "ok": None, "run": "FAILED expect:y"}
+    first = mw.checks_text(results, []).splitlines()[0]
+    assert first.startswith("1 of 3 checks pass. 1 of them did not run") and "No change to the app" in first
+    assert "did not run" not in mw.checks_text({"ok": None, "run": "FAILED expect:y"}, [])
+
+
 def test_loop_says_when_thinking_was_cut_off(ws, monkeypatch):
     from lightness.agent import loop as loop_mod
 

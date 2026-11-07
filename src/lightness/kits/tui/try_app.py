@@ -154,10 +154,17 @@ def grid(widget) -> list[str] | None:
     if not cells or any(c.children for c in cells):
         return None
     common = set.intersection(*(set(c.classes) for c in cells))
-    labels = [plain(c.render()) or "+".join(sorted(set(c.classes) - common)) or "." for c in cells]
+    texts = [plain(c.render()) for c in cells]
+    by_class = ["+".join(sorted(set(c.classes) - common)) or "." for c in cells]
+    # every cell showing the same text while their classes differ (a board styled by class): the text
+    # tells nothing, so draw the classes (the 35B read an all-'.' drawing of a lit board as "no board")
+    same_text = all(texts) and len(set(texts)) == 1 and len(set(by_class)) > 1
+    labels = by_class if same_text else [t or k for t, k in zip(texts, by_class)]
     cols = widget.styles.grid_size_columns or 1
     width = max(len(t) for t in labels)
     lines = ["  " + " ".join(t.ljust(width) for t in labels[i:i + cols]).rstrip() for i in range(0, len(labels), cols)]
+    if same_text:
+        lines.insert(0, f"  (every cell shows {texts[0]!r}; drawn by CSS class instead)")
     # a class only one or two cells have (a cursor, a selection) is lost when cells show text: list it
     counts = Counter(c for cell in cells for c in set(cell.classes) - common)
     for cls_name in sorted(k for k, n in counts.items() if n <= 2):

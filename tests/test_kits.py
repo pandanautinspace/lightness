@@ -865,6 +865,17 @@ def test_try_app_grid_lists_a_class_only_one_cell_has(tmp_path):
     assert "class cursor: #c0 (row 0, col 0)" in out and "ok: expect:class cursor: #c1" in out
 
 
+def test_try_app_grid_of_same_text_cells_is_drawn_by_class(tmp_path):
+    (tmp_path / "g.py").write_text(
+        "from textual.app import App\nfrom textual.widgets import Static\n\n\nclass G(App):\n"
+        "    CSS = '#board { layout: grid; grid-size: 2; }'\n\n"
+        "    def compose(self):\n        from textual.containers import Container\n"
+        "        with Container(id='board'):\n            for i in range(4):\n"
+        "                yield Static('.', id=f'c{i}', classes='cell on' if i < 3 else 'cell off')\n")
+    out = try_app(tmp_path, {"module": "g", "app_class": "G", "params": []})
+    assert "(every cell shows '.'; drawn by CSS class instead)\n    on  on\n    on  off" in out
+
+
 def test_try_app_tabs_line_names_how_to_switch(tmp_path):
     (tmp_path / "t.py").write_text(
         "from textual.app import App\nfrom textual.widgets import Static, TabbedContent, TabPane\n\n\nclass T(App):\n"

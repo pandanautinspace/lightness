@@ -471,3 +471,21 @@ def test_kit_checks_arm_suspects_the_checks_after_two_ineffective_app_changes(ws
     TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("checks")], step_limit=7).run("notes app")
     outs = tool_outputs(client)
     assert mw.CHECKS_SUSPECT not in outs[1] and mw.CHECKS_SUSPECT in outs[2]
+
+
+def test_kit_edit_switch_points_a_small_change_rewrite_to_the_edit_command(ws, monkeypatch):
+    lines = "".join(f"c{i}: expect-not:\"zz{i}\"\n" for i in range(24))
+    first = write("checks.txt", lines)
+    again = write("checks.txt", lines.replace("zz3", "yy3"))
+    run_dir = ws.parent
+    env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
+    for switch, expected in (("", False), ("1", True)):
+        monkeypatch.setenv("LIGHTNESS_EDIT", switch)
+        for f in ws.iterdir():
+            if f.is_file():
+                f.unlink()
+        client = KitClient([first, again, SUBMIT, "echo never"], NOTES)
+        TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("checks")], step_limit=4).run("notes app")
+        outs = tool_outputs(client)
+        assert ("That wrote all 24 lines of checks.txt again to change 1 of them" in outs[1]) is expected
+        assert "That wrote all" not in outs[0]

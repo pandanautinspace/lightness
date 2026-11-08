@@ -2,6 +2,7 @@
 against the bare baseline; keep only what helps.
 """
 
+import difflib
 import hashlib
 import json
 import re
@@ -219,6 +220,8 @@ TRIES_AGAIN = ("[automatic checks] {n} try commands in a row with nothing change
                "have seen into checks.txt, or change the app.")
 CHECKS_IDLE = ("[automatic checks] All {n} checks pass and the last {steps} steps changed nothing. If something "
                "the task asks for isn't covered, add it as a check in checks.txt; otherwise submit now.")
+REWRITE_NOTE = ("[automatic checks] That wrote all {n} lines of {file} again to change {k} of them. Change just "
+                "those lines with the edit command next time (see Changing a file): seconds instead of minutes.")
 SAME_TEXT = ("[automatic checks] {files} was written again with exactly the same text as before: nothing "
              "changed. Find the line you meant to change and change just that line.")
 CHECKS_BY_HAND = ("[automatic checks] That ran checks.txt by hand: the harness already ran it after the last change "
@@ -358,6 +361,25 @@ class Kit(Middleware):
                 out[name] = (path.stat().st_mtime_ns, path.read_text(errors="replace"))
         return out
 
+    def _small_change_rewritten(self, ctx: Ctx, command: str, before: dict) -> str | None:
+        """Speed experiment B: a whole-file write of the app or checks.txt that changed only a few of its
+        lines gets a pointer to the edit command (its section alone didn't change the 35B's habit)."""
+        from lightness import kits
+
+        if not kits.editing(ctx.data["kit"][0]):
+            return None
+        for name, (_, text) in self._watched(ctx).items():
+            old = before.get(name, (None, None))[1]
+            if old is None or old == text or not re.search(rf">\s*{re.escape(name)}\b", command):
+                continue
+            a, b = old.splitlines(), text.splitlines()
+            ops = difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes()
+            changed = sum(max(i2 - i1, j2 - j1) for tag, i1, i2, j1, j2 in ops if tag != "equal")
+            if len(b) >= 20 and changed <= max(3, len(b) // 4):
+                ctx.log("kit.small_change_rewritten", file=name, lines=len(b), changed=changed)
+                return REWRITE_NOTE.format(file=name, n=len(b), k=changed)
+        return None
+
     def before_command(self, ctx: Ctx, command: str) -> None:
         if "kit" in ctx.data and ctx.data["kit"][0].category == "tui":
             ctx.data["kit.before"] = self._watched(ctx)
@@ -377,6 +399,8 @@ class Kit(Middleware):
         if same:
             ctx.log("kit.same_text", files=same)
             notes.append(SAME_TEXT.format(files=" and ".join(same)))
+        if (rewrite := self._small_change_rewritten(ctx, command, before)) is not None:
+            notes.append(rewrite)
         sig = repr(sorted(py_files(ctx.ws).items()))
         if sig != ctx.data.get("kit.sig"):  # something changed since the last smoke check
             ctx.data["kit.sig"] = sig

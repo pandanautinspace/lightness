@@ -406,7 +406,7 @@ def expectation(action: str, value: str, state: dict[str, list[str]], data_files
             # the 35B wrote expect:"#path '$'" (no colon) and expect:"#path: $" (no quotes) for steps while
             # the screen said #path: '$' (json-viewer)
             text = m[2][1:-1] if len(m[2]) > 1 and m[2][0] == m[2][-1] and m[2][0] in "'\"" else m[2]
-            for near in (f"{m[1]}: {text!r}", f"{m[1]}: {m[2]}"):
+            for near in (f"{m[1]}: {text!r}", f"{m[1]}: {m[2]}", f"{m[1]}: {m[2]!r}"):  # last: '"inventory"'
                 if near != want and near in screen:
                     return (f"not on the screen as written (the screen has {near}: write it exactly so, with the "
                             "colon after the id and the quotes)")

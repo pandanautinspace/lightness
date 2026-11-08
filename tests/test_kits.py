@@ -872,8 +872,9 @@ def test_try_app_grid_of_same_text_cells_is_drawn_by_class(tmp_path):
         "    def compose(self):\n        from textual.containers import Container\n"
         "        with Container(id='board'):\n            for i in range(4):\n"
         "                yield Static('.', id=f'c{i}', classes='cell on' if i < 3 else 'cell off')\n")
-    out = try_app(tmp_path, {"module": "g", "app_class": "G", "params": []})
+    out = try_app(tmp_path, {"module": "g", "app_class": "G", "params": []}, "expect:class on: #c2")
     assert "(every cell shows '.'; drawn by CSS class instead)\n    on  on\n    on  off" in out
+    assert "class on: #c0 (row 0, col 0)\n    class on: #c1 (row 0, col 1)" in out and "ok: expect:class on: #c2" in out
 
 
 def test_try_app_tabs_line_names_how_to_switch(tmp_path):

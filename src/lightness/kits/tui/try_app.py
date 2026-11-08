@@ -146,6 +146,9 @@ def describe(widget) -> list[str]:
     return [f"{name(widget)}: {cut(text)!r}"]
 
 
+GRID_CLASS_CELLS = 15  # cells listed per class
+
+
 def grid(widget) -> list[str] | None:
     """A grid layout of leaf cells, drawn as rows: each cell's text, or its own CSS classes."""
     if widget.styles.layout is None or widget.styles.layout.name != "grid":
@@ -165,11 +168,14 @@ def grid(widget) -> list[str] | None:
     lines = ["  " + " ".join(t.ljust(width) for t in labels[i:i + cols]).rstrip() for i in range(0, len(labels), cols)]
     if same_text:
         lines.insert(0, f"  (every cell shows {texts[0]!r}; drawn by CSS class instead)")
-    # a class only one or two cells have (a cursor, a selection) is lost when cells show text: list it
+    # which cell has which class (a cursor, lit cells, a selection), one line per cell so a check can
+    # expect "class on: #cell-0-1"; listing only classes 1-2 cells had left 3+ lit cells uncheckable
     counts = Counter(c for cell in cells for c in set(cell.classes) - common)
-    for cls_name in sorted(k for k, n in counts.items() if n <= 2):
+    for cls_name in sorted(counts, key=lambda k: (counts[k], k)):  # rarest first: a cursor before 20 dark cells
         where = [f"{name(c)} (row {i // cols}, col {i % cols})" for i, c in enumerate(cells) if cls_name in c.classes]
-        lines.append(f"  class {cls_name}: {', '.join(where)}")
+        lines += [f"  class {cls_name}: {w}" for w in where[:GRID_CLASS_CELLS]]
+        if len(where) > GRID_CLASS_CELLS:
+            lines.append(f"  class {cls_name}: … {len(where) - GRID_CLASS_CELLS} more cells")
     return [f"{name(widget)} grid {cols} wide:"] + rows(lines)
 
 

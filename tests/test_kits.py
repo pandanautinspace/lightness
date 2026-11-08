@@ -1334,3 +1334,12 @@ def test_try_app_builtin_check_keys_show_their_effect_without_a_tick(tmp_path):
     assert "pressing space, letting 3 s pass, then pressing space shows" in out
     (tmp_path / "w.py").write_text(app.replace("TICK", "        self.tick()\n"))
     assert "PASS harness: a key's effect shows at once" in try_app(tmp_path, names, "--builtin")
+
+
+def test_try_app_expect_does_not_match_the_harness_notes(tmp_path):
+    (tmp_path / "m.py").write_text(
+        "from textual.app import App\nfrom textual.widgets import Static\n\n\nclass M(App):\n"
+        "    def compose(self):\n        yield Static('[modified]', id='status')\n")
+    out = try_app(tmp_path, {"module": "m", "app_class": "M", "params": []}, "expect:modified", "expect-not:modified")
+    assert "was read as markup" in out  # the note is still shown
+    assert "FAILED expect:modified" in out and "ok: expect-not:modified" in out  # but not matched

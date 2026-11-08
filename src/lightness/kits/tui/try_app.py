@@ -370,8 +370,15 @@ def show_changes(before: dict[str, list[str]], after: dict[str, list[str]], file
         say(f"  (only the cursor in {changed[0]} moved; no other widget changed)")
 
 
+# the harness's own notes inside widget lines are not what the app shows: an expect must not match them
+# (notepad pass 6: status.update("[modified]") showed nothing, and expect:"modified" passed on the markup
+# note that quoted the lost text)
+HARNESS_NOTES = re.compile(r" \(its text .*? was read as markup: .*?update\(\) itself has no markup argument\)"
+                           r"| \(up/down move one row, [^)]*\)| \((?:row|column|cell|no) cursor[^)]*\)")
+
+
 def screen_text(state: dict[str, list[str]]) -> str:
-    return " ".join(" ".join(line.split()) for lines in state.values() for line in lines)
+    return " ".join(" ".join(HARNESS_NOTES.sub("", line).split()) for lines in state.values() for line in lines)
 
 
 def expectation(action: str, value: str, state: dict[str, list[str]], data_files: dict[str, Path]) -> str | None:

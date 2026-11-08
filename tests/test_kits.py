@@ -887,6 +887,7 @@ def test_try_app_grid_lists_a_class_only_one_cell_has(tmp_path):
         "        self.query_one('#c1').add_class('cursor')\n")
     out = try_app(tmp_path, {"module": "g", "app_class": "G", "params": []}, "press:right", "expect:class cursor: #c1")
     assert "class cursor: #c0 (row 0, col 0)" in out and "ok: expect:class cursor: #c1" in out
+    assert "cells #c0 … #c3 (4, row by row)" in out  # every cell id is checkable, not only ones with a class
 
 
 def test_try_app_grid_of_same_text_cells_is_drawn_by_class(tmp_path):

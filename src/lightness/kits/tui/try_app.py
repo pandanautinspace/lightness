@@ -192,6 +192,8 @@ def grid(widget) -> list[str] | None:
     lines = ["  " + " ".join(t.ljust(width) for t in labels[i:i + cols]).rstrip() for i in range(0, len(labels), cols)]
     if same_text:
         lines.insert(0, f"  (every cell shows {texts[0]!r}; drawn by CSS class instead)")
+    if cells[0].id and cells[-1].id:  # the 35B checked expect:"#cell-4-4", which no line named (lights-out)
+        lines.append(f"  cells {name(cells[0])} … {name(cells[-1])} ({len(cells)}, row by row)")
     if common - {"-highlight"}:  # a state every cell has (an all-lit board) is still state: name it
         # one line, not 25: the 35B then probed for "class cell: #cell-0-4" for 3 steps; say how to check it
         lines.append(f"  every cell has class: {', '.join(sorted(common))} (listed once here, not per cell; check it "

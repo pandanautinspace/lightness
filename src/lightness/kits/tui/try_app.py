@@ -141,9 +141,31 @@ def describe(widget) -> list[str]:
         lines = [str(x) for x in getattr(widget, "lines", [])]
         return [f"{name(widget)} log, last lines:"] + ["  " + cut(plain(x) or str(x)) for x in lines[-ROWS:]]
     text = plain(widget.render())
+    source = getattr(widget, "content", None)
+    if isinstance(source, str) and "[" in source and plain(widget.render()).strip() != source.strip() \
+            and any(not_a_style(tag) for tag in re.findall(r"\[([^\]/][^\]]*)\]", source)):
+        # "[modified]" set on a Static is read as a markup tag and shows nothing (the 35B, notepad)
+        lost = f" (its text {cut(source)!r} was read as markup: [..] is a style tag; to show brackets, " \
+               f"Static(..., markup=False) or rich.markup.escape(text))"
+    else:
+        lost = ""
     if not text:  # an empty widget the task names (has an id) is shown, so "empty" differs from "missing"
-        return [f"{name(widget)}: (empty)"] if widget.id else []
-    return [f"{name(widget)}: {cut(text)!r}"]
+        return [f"{name(widget)}: (empty){lost}"] if widget.id else []
+    return [f"{name(widget)}: {cut(text)!r}{lost}"]
+
+
+def not_a_style(tag: str) -> bool:
+    """A [tag] in widget text that isn't a style, a link or a theme variable: meant as text, not markup."""
+    from rich.style import Style
+
+    tag = tag.strip()
+    if tag.startswith(("$", "@", "link=")) or not tag:
+        return False
+    try:
+        Style.parse(tag)
+        return False
+    except Exception:  # noqa: BLE001 - rich's StyleSyntaxError and friends
+        return True
 
 
 GRID_CLASS_CELLS = 15  # cells listed per class

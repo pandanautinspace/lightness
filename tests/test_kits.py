@@ -1141,3 +1141,14 @@ def test_edit_json_refuses_deleting_most_of_a_file(tmp_path):
     assert rc == 1 and text == src and "would delete 20 of the 20 lines" in out
     rc, out, text = run_edit_json(tmp_path, "b.py", src, "line3 = 3\n", "")
     assert rc == 0 and "line3" not in text  # deleting a few lines is fine
+
+
+def test_try_app_says_when_bracketed_text_was_read_as_markup(tmp_path):
+    (tmp_path / "m.py").write_text(
+        "from textual.app import App\nfrom textual.widgets import Static\n\n\nclass M(App):\n"
+        "    def compose(self):\n        yield Static('[modified]', id='status')\n"
+        "        yield Static('[b]bold[/b]', id='b')\n        yield Static('[x] done', id='x', markup=False)\n")
+    out = try_app(tmp_path, {"module": "m", "app_class": "M", "params": []})
+    assert "#status: (empty) (its text '[modified]' was read as markup" in out
+    assert "#x: '[x] done'\n" in out  # markup=False: shown as is, no note
+    assert "#b: 'bold'\n" in out  # intended markup: no note

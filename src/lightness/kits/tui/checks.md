@@ -38,7 +38,8 @@ Each check is independent: it starts a fresh app, with no records unless its own
 adds it first, in its own steps.
 
 Write one check per contract item: each key and what it does, the saved file's exact format,
-starting with no data file and with existing data, and wrong input. Take the expected values
+starting with no data file and with existing data, and wrong input. When a key changes saved data, check
+both: the file (expect-file:) and the screen right after the key, without a restart (expect:). Take the expected values
 from the task. The harness already checks on its own that every key works without crashing (with
 and without a data file), that a start keeps the saved file, that time can move, and that the same seed
 gives the same start: don't write checks for those.

@@ -546,7 +546,7 @@ async def run(cls, kw, data_files: dict[str, Path], clock: FakeClock | None, ste
                     elif action == "click":
                         if (hidden := not_clickable(app, value)) is not None:
                             say(f"  {value} can't be clicked: {hidden}. A user couldn't click it either: fix the "
-                                "layout (sizes of it and its container), or focus it and press enter")
+                                "layout (sizes of it and its container; a dialog's box needs room for every line in it)")
                             continue
                         await pilot.click(value)
                     elif action == "focus":
@@ -915,6 +915,49 @@ async def focus_targets(cls, kw) -> list[str | None]:
     return [None] + ids[:2] + ([NO_FOCUS] if typing else [])
 
 
+async def unclickable_buttons(cls, kw, focus: str | None, keys: list[str]) -> tuple[bool, dict]:
+    """(any button seen, {(screen, id): problem}): every Button with an id on the start screen and on each screen a key
+    opens must be clickable. bookmarks (passes 2 and 4): the dialog's Cancel was cut off, the model's
+    check focused it and pressed enter, and a click (as a user, or the hidden tests, would do) missed."""
+    from textual.widgets import Button
+
+    seen, problems = False, {}
+    where = f" with {focus} focused" if focus else ""
+
+    def check(after: str) -> None:
+        nonlocal seen
+        for b in app.screen.query(Button):
+            seen = True
+            key = (type(app.screen).__name__, b.id)
+            if not b.id or b.id.startswith("-") or not b.region.area or key in problems:
+                continue  # no area: not shown at all (e.g. in a tab that isn't active), so not a layout slip
+            if (why := not_clickable(app, f"#{b.id}")) is not None:
+                problems[key] = (f"#{b.id} {after} can't be clicked: {why}. A user couldn't click it either: fix the "
+                                 "layout (sizes of it and its container; a dialog's box needs room for every line in it)")
+
+    app = cls(**kw)
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        check("on the start screen")
+        base = app.screen
+        for key in keys:
+            if focus == NO_FOCUS:
+                app.set_focus(None)
+            elif focus and app.screen.query(focus):
+                app.screen.query_one(focus).focus()
+            await pilot.pause()
+            await pilot.press(key)
+            await pilot.pause()
+            if not app.is_running:
+                break
+            if app.screen is not base:
+                check(f"(after pressing {key}{where}, on {type(app.screen).__name__})")
+                while app.screen is not base and len(app.screen_stack) > 1:
+                    app.pop_screen()
+                    await pilot.pause()
+    return seen, problems
+
+
 async def press_keys(cls, kw, data_files, focus: str | None, keys: list[str]) -> str | None:
     """Press each key in turn in a fresh app (FOCUS focused first). If that changed a data file,
     start again and check the start leaves the file as it was. None, or what went wrong."""
@@ -993,6 +1036,25 @@ def builtin_checks(config: dict, cls) -> list[tuple[str, str | None]]:
             break
         problems = asyncio.run(case_check([f"--file-text={t}" for t in file_text] + ([] if file_text else ["--empty"])))
         out.append((f"harness: every key works, starting with {label}", "\n".join(problems[:3]) or None))
+
+    async def buttons() -> tuple[bool, list[str]]:
+        try:
+            targets = await fresh(["--empty"], lambda kw, _: focus_targets(cls, kw))
+        except Exception:  # noqa: BLE001 - a start crash is reported by the key check
+            return False, []
+        seen, problems = False, {}
+        for focus in targets:
+            try:
+                s, p = await fresh(["--empty"], lambda kw, _: unclickable_buttons(cls, kw, focus, keys))
+            except Exception:  # noqa: BLE001 - key crashes are reported by the key check
+                continue
+            seen = seen or s
+            problems = p | problems  # the first focus that showed it
+        return seen, list(problems.values())
+
+    seen, problems = asyncio.run(buttons())
+    if seen:
+        out.append(("harness: every button can be clicked", "\n".join(problems[:3]) or None))
     if any(p["role"] == "clock" for p in params):
         async def time_moves():
             tmp = Path(tempfile.mkdtemp(prefix="check-", dir=".lightness"))

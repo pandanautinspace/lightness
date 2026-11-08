@@ -1237,3 +1237,21 @@ def test_try_app_table_header_names_its_cursor(tmp_path):
         "        t.add_row('1', '2')\n")
     out = try_app(tmp_path, {"module": "d", "app_class": "D", "params": []})
     assert "#t table 1 rows, cursor=(0, 0) (row cursor: left/right do nothing), columns=['a', 'b']:" in out
+
+
+def test_try_app_builtin_check_every_button_can_be_clicked(tmp_path):
+    app = ("from textual.app import App\nfrom textual.containers import Vertical\nfrom textual.screen import ModalScreen\n"
+           "from textual.widgets import Button, Input\n\n\nclass Ask(ModalScreen):\n"
+           "    def compose(self):\n        with Vertical(id='box'):\n"
+           "            yield Input(id='i1')\n            yield Input(id='i2')\n            yield Button('OK', id='ok')\n\n\n"
+           "class B(App):\n    CSS = '#box { height: BOX; }'\n    BINDINGS = [('a', 'ask')]\n\n"
+           "    def compose(self):\n        yield Button('Go', id='go')\n\n"
+           "    def action_ask(self):\n        self.push_screen(Ask())\n")
+    names = {"module": "b", "app_class": "B", "params": []}
+    (tmp_path / "b.py").write_text(app.replace("BOX", "auto"))
+    out = try_app(tmp_path, names, "--builtin")
+    assert "PASS harness: every button can be clicked" in out
+    (tmp_path / "b.py").write_text(app.replace("BOX", "4"))  # the box cuts the OK button off
+    out = try_app(tmp_path, names, "--builtin")
+    assert "FAIL harness: every button can be clicked\n    #ok (after pressing a" in out
+    assert "on Ask) can't be clicked" in out

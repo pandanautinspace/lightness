@@ -918,6 +918,8 @@ def test_lint_rejects_unknown_keys_and_glued_steps():
     assert "a new step starts a new word" in " ".join(lint(shlex.split("press:down,down,press:enter")))
     assert lint(shlex.split('press:ctrl+s,enter press:comma press:shift+tab type:"a,b" press:down,space')) == []
     assert lint(shlex.split("press:down*15,enter press:asterisk")) == []
+    assert "types the word 'enter'; to press the key, press:enter" in " ".join(lint(shlex.split("type:enter")))
+    assert lint(shlex.split('type:"enter the code" type:Tabby')) == []
     assert "'nokey' is not a key" in " ".join(lint(shlex.split("press:nokey*3")))
 
 

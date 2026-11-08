@@ -647,6 +647,8 @@ NAMES: set[str] = set()
 # (not "#path: '$'": a line copied from the dump, colon then space, is real screen text)
 SELECTOR = re.compile(r"^#[\w-]+(\.[\w-]|:[a-z]|\[| *> )")
 CLASS_LIKE = re.compile(r"^(\.[\w-]+$|#[\w-]+(\.[\w-]|:[a-z]|\[| *> ))")  # one bare .class, or a compound selector
+# type:enter typed the word "enter" into an input (the 35B, bookmarks); a whole value that is a key name
+TYPED_KEYS = {"enter", "tab", "escape", "esc", "space", "backspace", "delete", "up", "down", "left", "right"}
 STEP_NAMES = ("type", "press", "click", "focus", "wait", "advance", "expect", "expect-not", "expect-file")
 OPTIONS = ("--file", "--file-text", "--kw", "--data", "--data-from")
 # a step glued to the one before by a comma (press:down,down,press:enter): the 35B read "one step per word"
@@ -707,7 +709,9 @@ def lint(tokens: list[str], files: list[str] | None = None) -> list[str]:
             problems.append(f"{tok!r} is not a step: text with spaces needs quotes, e.g. type:\"two words\"")
         else:
             action, value = tok.split(":", 1)
-            if action in ("expect", "expect-not") and not value.strip():
+            if action == "type" and value.strip().lower() in TYPED_KEYS:
+                problems.append(f"{tok!r} types the word {value.strip()!r}; to press the key, press:{value.strip().lower()}")
+            elif action in ("expect", "expect-not") and not value.strip():
                 problems.append(f"{tok!r} has no text to look for")
             elif action in ("expect", "expect-not") and SELECTOR.match(value):
                 problems.append(f"{tok!r}: expect matches text on the screen, not a CSS selector (a bare #id "

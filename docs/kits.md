@@ -841,7 +841,7 @@ that lost those tests.
 **Edits.** Every run used `edit_file` for most changes; whole-file rewrites still happen after a
 missed edit or for larger reworks (trip-split, lights-out, json-viewer).
 
-**Intent** stays low (4/26): the hidden intent tests (undo, hours format, newest lap first, numeric
+**Intent** stays low (2/23 on the 8 finished): the hidden intent tests (undo, hours format, newest lap first, numeric
 sort) ask for things the contract doesn't, and the checks arm only covers the contract.
 
 **Next:** a fifth pass from `b5e38d8` over all 9, json-viewer last, with no fixes expected to land

@@ -259,11 +259,36 @@ def check_detail(detail: str) -> list[str]:
     failed = [k for k, line in enumerate(rows) if line.lstrip().startswith("FAILED ")]
     if not failed:
         return rows[-CHECK_LINES:]
-    shown = rows[failed[0]:failed[0] + CHECK_LINES]
+    end = failed[1] if len(failed) > 1 else len(rows)
+    shown = [rows[failed[0]]] + screen_lines(rows[failed[0] + 1:end], CHECK_LINES - 1)
     # a step that couldn't do what it said ("can't be clicked: ... cut off") comes before the FAILED line
     # and is often the reason for it: keep those (the 35B chased 'Static gets no clicks' without it)
     before = [line for line in rows[:failed[0]] if STEP_PROBLEM.search(line)]
-    return before + shown + [rows[k].strip() for k in failed if k >= failed[0] + CHECK_LINES]
+    return before + shown + [rows[k].strip() for k in failed[1:]]
+
+
+def screen_lines(screen: list[str], budget: int) -> list[str]:
+    """A screen dump cut to about BUDGET lines: every widget line stays, rows inside a table, list or tree
+    are cut first. csv-browser: a 15-row table filled the cut, and #count (the widget the expect was about)
+    never showed; the 35B edited CSS for 3 steps looking for it."""
+    if len(screen) <= budget:
+        return screen
+    indent = [len(line) - len(line.lstrip()) for line in screen]
+    base = min((d for d, line in zip(indent, screen) if line.strip()), default=0)
+    keep = {k for k, d in enumerate(indent) if d <= base}
+    keep |= set([k for k in range(len(screen)) if k not in keep][:max(budget - len(keep), 0)])
+    out, skipped = [], 0
+    for k, line in enumerate(screen):
+        if k not in keep:
+            skipped += 1
+            continue
+        if skipped:
+            out.append(" " * (base + 2) + f"… {skipped} more rows")
+            skipped = 0
+        out.append(line)
+    if skipped:
+        out.append(" " * (base + 2) + f"… {skipped} more rows")
+    return out
 
 
 def checks_text(results: dict[str, str | None], regressions: list[str]) -> str:

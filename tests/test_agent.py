@@ -614,3 +614,13 @@ def test_check_detail_keeps_step_notes_the_final_screen_cant_show():
               "FAILED expect:x: not on the screen. Screen now:\n  #t table 1 rows")
     out = mw.check_detail(detail)
     assert out[0].startswith("  (left/right did nothing: #t has a row cursor") and out[1].startswith("FAILED expect:x")
+
+
+def test_check_detail_keeps_every_widget_line_and_cuts_rows_first():
+    rows = [f"      [{i}] book {i}" for i in range(15)]
+    detail = "\n".join(["    FAILED expect:3 of 15 rows: not on the screen. Screen now:", "      title: CSV",
+                        "      #table table 15 rows:", *[r.replace("      ", "        ") for r in rows],
+                        "      #count: '15 of 15 rows'"])
+    out = mw.check_detail(detail)
+    assert len(out) <= mw.CHECK_LINES + 2 and out[-1] == "      #count: '15 of 15 rows'"
+    assert any("more rows" in line for line in out) and "        [0] book 0" in out

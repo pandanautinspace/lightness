@@ -725,3 +725,34 @@ score, not stalls.
 
 **Edits in pass 3:** 16 `edit_file` calls in the 4 finished runs; one destructive call (above),
 caught by the model the next step; no other failed or damaging edits.
+
+**Retries (same pass, after the fixes above):**
+
+| task | retry result | code | spec | out tokens | wall s | steps | edits |
+|---|---|---|---|---|---|---|---|
+| json-viewer | finished | `ab95cba` | 4/10 (exact text, above) | 7.2k | 167 | 13 | 2 |
+| notepad | finished | `7a0c6ff` | 11/11 | 10.6k | 272 | 18 | 10 |
+| stopwatch | finished | `7a0c6ff` | 6/8 (the rounding ambiguity) | 17.8k | 422 | 11 | 6 |
+| bookmarks | stopped 3 times (steps 12, 13, 14) | | | | | | |
+| lights-out | stopped 3 times (steps 13, 9, 14) | | | | | | |
+| loan-calc | stopped twice (steps 18, 11) | | | | | | |
+
+More stops and fixes in the retries: an Input with `type="number"` silently dropping typed keys
+(`7a0c6ff`); the markup note's `markup=False` read as an `update()` argument, now said plainly
+(`48fb4c0`); "every cell has class: cell" probed as a per-cell line (`e91e52f`).
+
+**Where it stands.** 6 of 9 tasks have now finished on this code line (3 first time, 3 on a
+retry), at 167-422 s each on AC power; bookmarks, lights-out and loan-calc have not finished in
+pass 3. Every stop in the pass (14) had a cause the harness could make visible or prevent, and
+each is fixed for the whole category, but each new run still finds a new one: the stalls are now
+spread over many small, different gaps (a widget detail, a check-language corner, a Textual
+quirk) rather than a few big ones. Two things stand out for next time:
+
+- **Spec loss without stalls:** substring checks pass apps whose widgets show the wrong exact text
+  (json-viewer 4/10). The exact-text form (`2be8685`) is untested in a run yet.
+- **"Say submit, do something else":** twice the model announced a submit and emitted another
+  call; `66fa052` names the command in the notes, untested in a run yet.
+
+**Next:** a fourth pass from `e91e52f` over all 9 with the same settings, the stall rule, and the
+same batch method; the full 9 × 3 bench only after a pass where every task finishes first time
+(ask the user first).

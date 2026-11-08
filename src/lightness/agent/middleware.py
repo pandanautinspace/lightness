@@ -291,7 +291,14 @@ def screen_lines(screen: list[str], budget: int) -> list[str]:
     return out
 
 
+CHECKS_NONE = ("[no checks ran] checks.txt has no checks: a check is one line `NAME: steps`, and a line starting with "
+               "# is a comment, not a check. Write one check per item of the task's contract.")
+
+
 def checks_text(results: dict[str, str | None], regressions: list[str]) -> str:
+    if not results:
+        # json-viewer pass 7 wrote every check as "# check: ...": "0 of 0 checks pass" came with "submit now"
+        return CHECKS_NONE
     failing = {n: v for n, v in results.items() if v is not None}
     lines = [f"{len(results) - len(failing)} of {len(results)} checks pass."]
     if k := len(not_run(results)):  # a bare count read as "the app fails these" and the 35B rewrote the app

@@ -624,3 +624,8 @@ def test_check_detail_keeps_every_widget_line_and_cuts_rows_first():
     out = mw.check_detail(detail)
     assert len(out) <= mw.CHECK_LINES + 2 and out[-1] == "      #count: '15 of 15 rows'"
     assert any("more rows" in line for line in out) and "        [0] book 0" in out
+
+
+def test_checks_text_with_no_checks_says_so_and_never_says_submit():
+    out = mw.checks_text({}, [])
+    assert out == mw.CHECKS_NONE and "submit" not in out.lower()

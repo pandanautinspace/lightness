@@ -5,6 +5,8 @@
 - Inject the clock (a `now` callable) so tests control time; never call time.time() deep inside.
 - set_interval returns a Timer: timer.pause() / timer.resume() to stop and start.
 - A reactive attribute plus watch_<name>() keeps the display in sync with the value.
+- Every key that changes the state (start, pause, reset, ...) calls tick() itself before returning,
+  so the screen is right at once, not only at the next timer tick (tests read it right after the key).
 """
 
 import time

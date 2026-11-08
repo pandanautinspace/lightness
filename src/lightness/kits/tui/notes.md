@@ -17,6 +17,7 @@
   parameter (a callable returning seconds), and on each timer tick work out what to show from
   it; draw random numbers from `random.Random(seed)`. Then the try command's `advance:SECONDS`
   and tests move time without waiting. Don't wait for long stretches with `set_timer` (it counts
-  real seconds); check the clock on a short `set_interval` instead.
+  real seconds); check the clock on a short `set_interval` instead. A key that changes what's shown
+  (pause, reset, ...) updates the screen itself right away; it doesn't wait for the next tick.
 - **Testing:** {testing} Don't test by calling methods on an app that was never
   started, and don't run the app in the foreground: there is no terminal.

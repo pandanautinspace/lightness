@@ -29,7 +29,9 @@ Quote a step that has spaces: `expect:"total: 3"`. Lines starting with `#` are c
 
 `expect:` matches any part of the screen, so `expect:"12.50"` also passes when a widget shows `Total: 112.50`.
 When the task gives a widget's exact text, check all of it the way the screen prints it, id and quotes
-included: `expect:"#total: '12.50'"` passes only if #total shows exactly `12.50`.
+included: `expect:"#total: '12.50'"` passes only if #total shows exactly `12.50`. A widget's CSS classes are
+printed on its line (`#rate input: 'abc' classes: -invalid`): check one with `expect:"#rate input: 'abc' classes: -invalid"`
+or `expect:"classes: -invalid"`; there is no separate class step.
 
 {example}
 

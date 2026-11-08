@@ -216,6 +216,9 @@ CHECKS_SUSPECT = ("Two app changes in a row fixed none of them, so suspect the c
 TRIES_NUDGE = ("[automatic checks] That's three try commands in a row with no change to the app or checks.txt. "
                "Put what you learned into checks.txt now (fix the checks that were wrong, add what you were "
                "verifying by hand: each line runs after every change), or change the app.")
+TRIES_REFUSE_AFTER = 4  # try commands in a row with nothing changed; the next one isn't run
+TRIES_REFUSED = ("Not run: {n} try commands in a row with no change to the app or checks.txt. Write what you have "
+                 "learned into checks.txt (or change the app) first; the try command runs again after any change.")
 TRIES_AGAIN = ("[automatic checks] {n} try commands in a row with nothing changed. Stop exploring: write what you "
                "have seen into checks.txt, or change the app.")
 CHECKS_IDLE = ("[automatic checks] All {n} checks pass and the last {steps} steps changed nothing. If something "
@@ -224,6 +227,8 @@ REWRITE_NOTE = ("[automatic checks] That wrote all {n} lines of {file} again to 
                 "those lines with the edit_file tool next time (see Changing a file): seconds instead of minutes.")
 SAME_TEXT = ("[automatic checks] {files} was written again with exactly the same text as before: nothing "
              "changed. Find the line you meant to change and change just that line.")
+CHECKS_ON_SHELL = ("{app} is still the starting shell, so checks of what the app does fail for now; that "
+                   "doesn't make them wrong. Write the app next.")
 CHECKS_BY_HAND = ("[automatic checks] That ran checks.txt by hand: the harness already ran it after the last change "
                   "and all {n} pass, so this tells you nothing new. Submit now, or add a check for anything the task "
                   "asks that checks.txt doesn't cover yet.")
@@ -337,6 +342,7 @@ class Kit(Middleware):
         always = kit.meta.get("always", []) + (["headless_test"] if self.tests == "first" else [])
         chosen = list(dict.fromkeys(always + chosen))
         (ctx.ws / kits.shell_path(kit, names)).write_text(shell)
+        ctx.data["kit.shell"] = shell
         parts_dir = ctx.ws / ".lightness" / "kit" / "parts"
         parts_dir.mkdir(parents=True, exist_ok=True)
         for p in kit.parts:
@@ -380,9 +386,22 @@ class Kit(Middleware):
                 return REWRITE_NOTE.format(file=name, n=len(b), k=changed)
         return None
 
-    def before_command(self, ctx: Ctx, command: str) -> None:
-        if "kit" in ctx.data and ctx.data["kit"][0].category == "tui":
-            ctx.data["kit.before"] = self._watched(ctx)
+    def before_command(self, ctx: Ctx, command: str) -> str | None:
+        if "kit" not in ctx.data or ctx.data["kit"][0].category != "tui":
+            return None
+        ctx.data["kit.before"] = self._watched(ctx)
+        if self.tests == "checks" and "try_app" in command and "--checks" not in command \
+                and ctx.data.get("kit.tries", 0) >= TRIES_REFUSE_AFTER and self._try_state(ctx) == ctx.data.get("kit.try_state"):
+            # twice told, the 35B kept probing a tree one try at a time (json-viewer, 3 runs): refuse
+            ctx.log("kit.try_refused", tries=ctx.data["kit.tries"])
+            return TRIES_REFUSED.format(n=ctx.data["kit.tries"])
+        return None
+
+    def _try_state(self, ctx: Ctx) -> tuple:
+        from lightness.kits import smoke
+
+        checks_file = ctx.ws / smoke.CHECKS_FILE
+        return (repr(sorted(py_files(ctx.ws).items())), checks_file.read_text() if checks_file.exists() else None)
 
     def after_command(self, ctx: Ctx, command: str, output: dict) -> str | None:
         from lightness.kits import smoke
@@ -518,7 +537,12 @@ class Kit(Middleware):
             # the app changed but there is no checks.txt: only the harness's own checks ran
             failing = [n for n, v in now.items() if v is not None]
             return "[automatic checks] " + (checks_text(now, regressions) + "\n" if failing else "") + CHECKS_MISSING
-        return "[automatic checks] " + checks_text(now, regressions)
+        text = "[automatic checks] " + checks_text(now, regressions)
+        app = ctx.ws / f"{ctx.data['kit'][1]['module']}.py"
+        if any(v is not None for v in now.values()) and app.exists() and app.read_text() == ctx.data.get("kit.shell"):
+            # the 35B rewrote checks.txt 3 times against the untouched shell, reading each failure as its own
+            text += "\n" + CHECKS_ON_SHELL.format(app=app.name)
+        return text
 
     def on_submit(self, ctx: Ctx) -> str | None:
         """Refuse to submit an app that crashes on start (no limit: the step and wall limits apply)."""

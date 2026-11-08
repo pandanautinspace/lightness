@@ -219,8 +219,9 @@ class Middleware:
     def start(self, ctx: Ctx) -> str | None:
         """Extra text for the task message (e.g. the spec)."""
 
-    def before_command(self, ctx: Ctx, command: str) -> None:
-        """Called before each command runs (e.g. snapshot files)."""
+    def before_command(self, ctx: Ctx, command: str) -> str | None:
+        """Called before each command runs (e.g. snapshot files). A returned text refuses the command:
+        it isn't run and the text is its output."""
 
     def after_command(self, ctx: Ctx, command: str, output: dict) -> str | None:
         """Note appended to the command's observation."""
@@ -423,10 +424,16 @@ class TranscriptAgent:
                     ctx.log("submit_refused", by=refusal[:200])
                     ctx.messages.append(self._tool(call, refusal))
                     continue
+                refusal = None
                 for m in self.middleware:
-                    m.before_command(ctx, command)
-                output = self.runner(command, ctx)
-                notes = [x for m in self.middleware if (x := m.after_command(ctx, command, output))]
+                    if (x := m.before_command(ctx, command)) and refusal is None:
+                        refusal = x
+                if refusal is not None:
+                    ctx.log("command_refused", by=refusal[:120])
+                    output, notes = {"output": refusal, "returncode": -1}, []
+                else:
+                    output = self.runner(command, ctx)
+                    notes = [x for m in self.middleware if (x := m.after_command(ctx, command, output))]
                 if cut_off:
                     notes.insert(0, THINK_CUT)
                     cut_off = False

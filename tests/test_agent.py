@@ -545,3 +545,26 @@ def test_a_reply_cut_at_the_output_limit_says_so(ws):
     TranscriptAgent(client, ws, run_dir, os.environ | bench_env(), step_limit=4).run("task")
     assert "cut off at the output limit" in client.seen[1][-1]["content"]
     assert loop_mod.AGENT_MAX_TOKENS <= 16384
+
+
+def test_kit_checks_arm_refuses_a_fifth_try_in_a_row_until_something_changes(ws):
+    checks = write("checks.txt", "count: expect:\"1 notes\"\n")
+    tri = "python .lightness/kit/try_app.py press:a > /dev/null 2>&1; echo tried"
+    tri2 = "python .lightness/kit/try_app.py press:b > /dev/null 2>&1; echo tried"
+    run_dir = ws.parent
+    env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
+    client = KitClient([checks, tri, tri2, tri, tri2, tri, "echo '# c' >> checks.txt", tri, SUBMIT, SUBMIT, "echo never"],
+                       NOTES)
+    TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("checks")], step_limit=11).run("notes app")
+    outs = tool_outputs(client)
+    assert "tried" in outs[4] and "Not run: 4 try commands in a row" in outs[5] and "tried" not in outs[5]
+    assert "tried" in outs[7]  # after a change the try command runs again
+
+
+def test_kit_checks_report_says_when_the_app_is_still_the_shell(ws):
+    checks = write("checks.txt", "count: expect:\"1 notes\"\n")
+    run_dir = ws.parent
+    env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
+    client = KitClient([checks, SUBMIT, SUBMIT, "echo never"], NOTES)
+    TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("checks")], step_limit=4).run("notes app")
+    assert "notes.py is still the starting shell" in tool_outputs(client)[0]

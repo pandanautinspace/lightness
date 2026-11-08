@@ -1295,3 +1295,14 @@ def test_try_app_says_left_right_do_nothing_on_a_row_cursor_table(tmp_path):
     assert "(left/right did nothing: #t has a row cursor. For a cursor that moves by cell" in out
     (tmp_path / "d.py").write_text(app.replace("KIND", "cell"))
     assert "did nothing" not in try_app(tmp_path, names, "focus:#t", "press:right")
+
+
+def test_try_app_says_left_right_do_nothing_in_a_tree(tmp_path):
+    (tmp_path / "t.py").write_text(
+        "from textual.app import App\nfrom textual.widgets import Tree\n\n\nclass T(App):\n"
+        "    def compose(self):\n        t = Tree('root', id='tree')\n        t.root.expand()\n"
+        "        n = t.root.add('a')\n        n.add_leaf('b')\n        yield t\n")
+    names = {"module": "t", "app_class": "T", "params": []}
+    out = try_app(tmp_path, names, "focus:#tree", "press:right", "press:down")
+    assert "(left/right did nothing: #tree is a Tree; up/down move one row" in out
+    assert out.count("did nothing") == 1  # down moved the cursor: no note

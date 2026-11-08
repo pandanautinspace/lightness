@@ -534,7 +534,19 @@ async def run(cls, kw, data_files: dict[str, Path], clock: FakeClock | None, ste
                         typed_before = getattr(focused, "value", None) if type(focused).__name__ == "Input" else None
                         table_before = (focused.cursor_type, tuple(focused.cursor_coordinate)) \
                             if type(focused).__name__ == "DataTable" else None
-                        await pilot.press(*keys_of(value))
+                        is_tree = focused is not None and "Tree" in [c.__name__ for c in type(focused).__mro__]
+                        dead_tree_key = False
+                        if is_tree:  # one key at a time: in press:right,down the down hid the dead right
+                            for k in keys_of(value):
+                                tree_before = (focused.cursor_line, focused.last_line)
+                                await pilot.press(k)
+                                dead_tree_key |= k in ("left", "right") and (focused.cursor_line, focused.last_line) == tree_before
+                        else:
+                            await pilot.press(*keys_of(value))
+                        if dead_tree_key:
+                            # json-viewer (passes 4 and 5): checks pressed right to open a node, 12 of 30 stuck
+                            say(f"  (left/right did nothing: {name(focused)} is a Tree; up/down move one row, space "
+                                "opens/closes the node under the cursor)")
                         dead = {"row": {"left", "right"}, "column": {"up", "down"}}
                         if table_before and set(keys_of(value)) & dead.get(table_before[0], set()) \
                                 and tuple(focused.cursor_coordinate) == table_before[1]:
@@ -717,6 +729,8 @@ def try_once(config: dict, cls, a, stop_on_fail=False) -> int:
 
 
 DETAIL = 30  # lines of a failing check's output shown
+STEP_NOTE = re.compile(r"can't be clicked|no widget matches|did nothing: |as text: an Input has focus|"
+                       r"dropped the keys that don't fit|needs a clock parameter")
 
 
 # a name that is really a step or an option: the steps were written where the name goes
@@ -883,7 +897,10 @@ def file_checks(config: dict, cls, path: Path) -> list[tuple[str, str | None]]:
                 OUT[0] = sys.stdout
         # Textual's own boxed traceback (stderr) repeats the CRASH summary below it: leave it out
         lines = [x for x in buf.getvalue().rstrip().splitlines() if not x.lstrip().startswith(("\u256d", "\u2502", "\u2570"))]
-        detail = "\n".join(lines[-DETAIL:])
+        # a step note (a key that did nothing, a click that missed) is often the reason the expect failed:
+        # keep it when the long output is cut (json-viewer: "right did nothing" was above the last 30 lines)
+        notes = [x for x in lines[:-DETAIL] if STEP_NOTE.search(x)]
+        detail = "\n".join(notes + lines[-DETAIL:])
         if rc != 0 and all(t.split(":", 1)[0] in ("expect", "expect-not", "expect-file") for t in shlex.split(rest)
                            if not t.startswith("-")):
             detail = ("(this check has no steps before its expects, so it looked at a freshly started app; "

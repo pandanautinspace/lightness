@@ -69,7 +69,71 @@ def closest(lines: list[str], old: list[str]) -> str:
     return "\n".join(f"{k + 1:4}| {lines[k]}" for k in range(lo, hi))
 
 
+def replace_text(spec: dict) -> int:
+    """The edit_file tool (the harness turns its call into `edit.py --json` with this JSON on stdin):
+    old_text must occur exactly once in path; empty old_text with a missing path creates the file."""
+    path, old, new = Path(spec.get("path", "")), spec.get("old_text", ""), spec.get("new_text", "")
+    if not spec.get("path"):
+        print("Nothing changed: edit_file needs a path.")
+        return 1
+    if not path.exists():
+        if old:
+            print(f"Nothing changed: {path} doesn't exist. To create it, call edit_file with empty old_text.")
+            return 1
+        path.write_text(new)
+        print(f"Created {path} ({len(new.splitlines())} lines).")
+        return 0
+    text = path.read_text()
+    if not old:
+        print(f"Nothing changed: old_text is empty; copy the exact text to replace from {path}.")
+        return 1
+    count = text.count(old)
+    if count == 0 and old.strip() and text.count(old.strip("\n")) == 1:
+        old = old.strip("\n")  # a stray leading/trailing newline
+        new = new.strip("\n") if new.strip("\n") != new else new
+        count = 1
+    if count == 0:
+        print(f"Nothing changed: old_text is not in {path} (it must match exactly, spaces included). Closest "
+              "lines now in the file:\n" + closest(text.splitlines(), old.splitlines()))
+        return 1
+    if count > 1:
+        starts, at = [], -1
+        while (at := text.find(old, at + 1)) >= 0:
+            starts.append(text.count("\n", 0, at) + 1)
+        print(f"Nothing changed: old_text occurs {count} times in {path} (lines {', '.join(map(str, starts[:6]))}); "
+              "include a line before or after to pick one.")
+        return 1
+    result = text.replace(old, new, 1)
+    if path.suffix == ".py" and compiles(text, path) is True and (why := compiles(result, path)) is not True:
+        print(why)  # a file that compiled must still compile
+        return 1
+    path.write_text(result)
+    line = text[:text.find(old)].count("\n") + 1
+    print(f"Edited {path}: lines {line}-{line + max(new.count(chr(10)), 0)} ({len(result.splitlines())} lines now).")
+    return 0
+
+
+def compiles(text: str, path: Path) -> bool | str:
+    """True, or why it doesn't compile (a numbered excerpt)."""
+    try:
+        compile(text, str(path), "exec")
+        return True
+    except SyntaxError as e:
+        lines = text.splitlines()
+        at = e.lineno or 1
+        return (f"Nothing changed: after this edit {path} would not compile: {e.msg} at line {at}:\n"
+                + "\n".join(f"{k + 1:4}| {lines[k]}" for k in range(max(at - 3, 0), min(at + 2, len(lines)))))
+
+
 def main(argv: list[str]) -> int:
+    if len(argv) == 2 and argv[1] == "--json":
+        import json
+
+        try:
+            return replace_text(json.loads(sys.stdin.read()))
+        except json.JSONDecodeError as e:
+            print(f"Nothing changed: bad edit_file arguments ({e}).")
+            return 1
     if len(argv) != 2 or argv[1] in ("-h", "--help"):
         print(__doc__)
         return 2

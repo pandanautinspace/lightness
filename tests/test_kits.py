@@ -1095,4 +1095,30 @@ def test_edit_section_only_with_the_experiment_switch(monkeypatch):
     assert "## Changing a file" not in off and "(e.g. with sed)" in off
     monkeypatch.setenv("LIGHTNESS_EDIT", "1")
     on = kits.context(kit, names, ".lightness/kit/parts", [], "checks")
-    assert "## Changing a file" in on and "(with the edit command)" in on and "(e.g. with sed)" not in on
+    assert "## Changing a file" in on and "(with the edit_file tool)" in on and "(e.g. with sed)" not in on
+
+
+def run_edit_json(tmp_path, name, text, old, new):
+    import json
+    import subprocess
+    import sys
+
+    if text is not None:
+        (tmp_path / name).write_text(text)
+    proc = subprocess.run([sys.executable, str(KITS_DIR / "tui" / "edit.py"), "--json"], text=True, capture_output=True,
+                          cwd=tmp_path, input=json.dumps({"path": name, "old_text": old, "new_text": new}))
+    path = tmp_path / name
+    return proc.returncode, proc.stdout, path.read_text() if path.exists() else None
+
+
+def test_edit_json_replaces_one_exact_occurrence(tmp_path):
+    rc, out, text = run_edit_json(tmp_path, "a.py", "x = 1\ny = 2\n", "y = 2", "y = 3\nz = 4")
+    assert rc == 0 and text == "x = 1\ny = 3\nz = 4\n" and "Edited a.py: lines 2-3" in out
+    rc, out, text = run_edit_json(tmp_path, "b.py", "a = 1\na = 1\n", "a = 1", "a = 2")
+    assert rc == 1 and text == "a = 1\na = 1\n" and "occurs 2 times in b.py (lines 1, 2)" in out
+    rc, out, text = run_edit_json(tmp_path, "c.py", "def f():\n    return 1\n", "    return 9", "    return 2")
+    assert rc == 1 and "not in c.py" in out and "   2|     return 1" in out
+    rc, out, text = run_edit_json(tmp_path, "d.py", "def f():\n    return 1\n", "def f():", "def f(:")
+    assert rc == 1 and "would not compile" in out and text == "def f():\n    return 1\n"
+    rc, out, text = run_edit_json(tmp_path, "new.txt", None, "", "hello\n")
+    assert rc == 0 and text == "hello\n" and "Created new.txt" in out

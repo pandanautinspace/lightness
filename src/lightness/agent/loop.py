@@ -38,7 +38,7 @@ THINK_CUT = ("[harness] Your thinking ran out of room and was cut off, so anythi
 THINK: bool | int = int(os.environ["LIGHTNESS_THINK"]) if os.environ.get("LIGHTNESS_THINK") else True
 if os.environ.get("LIGHTNESS_EDIT"):  # speed experiment B: changes go through the kit's edit command
     THINK_CUT = THINK_CUT.replace("(cat > file <<'EOF' ...)", "(a new file with cat > file <<'EOF' ..., a change to "
-                                  "one with python .lightness/kit/edit.py)")
+                                  "one with the edit_file tool)")
 
 SYSTEM = "You are a helpful assistant that can interact with a computer."
 
@@ -140,6 +140,33 @@ BASH_TOOL = {
         },
     },
 }
+
+
+EDIT_TOOL = {  # speed experiment B (LIGHTNESS_EDIT=1): a native edit tool, run as the kit's edit.py
+    "type": "function",
+    "function": {
+        "name": "edit_file",
+        "description": ("Change part of an existing file: replace old_text, which must occur exactly once in the "
+                        "file (copy it exactly, spaces included), with new_text. Use this for every change to a "
+                        "file that exists instead of writing the whole file again. With empty old_text and a path "
+                        "that doesn't exist yet, it creates the file."),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "The file, relative to the project directory"},
+                "old_text": {"type": "string", "description": "The exact text to replace (a few whole lines)"},
+                "new_text": {"type": "string", "description": "The text to put in its place"},
+            },
+            "required": ["path", "old_text", "new_text"],
+        },
+    },
+}
+EDIT_SCRIPT = ".lightness/kit/edit.py"
+EDIT_EOF = "LIGHTNESS_EDIT_EOF"
+
+
+def edit_tool_offered(ws: Path) -> bool:
+    return bool(os.environ.get("LIGHTNESS_EDIT")) and (ws / EDIT_SCRIPT).exists()
 
 
 @dataclass
@@ -319,7 +346,7 @@ class TranscriptAgent:
             try:
                 for _ in range(5):  # an empty reply (e.g. a proxy's moderation block) is asked again
                     reply = self.client.chat(ctx.messages, purpose="agent", thinking=THINK, max_tokens=16384,
-                                             tools=[BASH_TOOL])
+                                             tools=[BASH_TOOL, EDIT_TOOL] if edit_tool_offered(ctx.ws) else [BASH_TOOL])
                     if reply.tool_calls or reply.text.strip():
                         break
                     ctx.log("empty_reply", finish=reply.finish_reason, refusal=reply.refusal[:120])
@@ -343,7 +370,7 @@ class TranscriptAgent:
                 reply.text = ""  # some APIs (Bedrock) reject text and a tool call in one message
                 ctx.log("text_tool_call")
             ctx.messages.append(self._assistant(reply))
-            calls = [c for c in reply.tool_calls if c.get("function", {}).get("name") == "bash"]
+            calls = [c for c in reply.tool_calls if c.get("function", {}).get("name") in ("bash", "edit_file")]
             if not calls:
                 ctx.messages.append({"role": "user", "content": format_error(ctx.ws)})
                 ctx.log("format_error", finish=reply.finish_reason)
@@ -391,10 +418,16 @@ class TranscriptAgent:
 
 
 def _command(call: dict) -> str:
+    """The bash command of a call; an edit_file call becomes the equivalent edit.py command, so every
+    middleware and log sees it like any other command."""
     try:
-        return str(json.loads(call["function"].get("arguments") or "{}").get("command", ""))
+        args = json.loads(call["function"].get("arguments") or "{}")
     except json.JSONDecodeError:
         return ""
+    if call["function"].get("name") == "edit_file":
+        spec = {k: str(args.get(k, "")) for k in ("path", "old_text", "new_text")}
+        return f"python {EDIT_SCRIPT} --json <<'{EDIT_EOF}'\n{json.dumps(spec)}\n{EDIT_EOF}"
+    return str(args.get("command", ""))
 
 
 def _ends(text: str, head: int = 600, tail: int = 900) -> str:

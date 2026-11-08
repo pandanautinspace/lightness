@@ -275,7 +275,7 @@ def checking(kit: Kit, names: dict, tests: str) -> str:
         return ""
     text = path.read_text().replace("{example}", checks_example(names))
     if editing(kit):
-        text = text.replace("(e.g. with sed)", "(with the edit command)")
+        text = text.replace("(e.g. with sed)", "(with the edit_file tool)")
     return text + "\n\n"
 
 

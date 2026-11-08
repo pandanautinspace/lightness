@@ -489,3 +489,31 @@ def test_kit_edit_switch_points_a_small_change_rewrite_to_the_edit_command(ws, m
         outs = tool_outputs(client)
         assert ("That wrote all 24 lines of checks.txt again to change 1 of them" in outs[1]) is expected
         assert "That wrote all" not in outs[0]
+
+
+def test_edit_file_tool_is_offered_with_the_switch_and_runs_as_the_kit_edit_command(ws, monkeypatch):
+    from lightness.agent import loop as loop_mod
+
+    class EditClient(KitClient):
+        def chat(self, messages, **kw):
+            self.tools_seen = getattr(self, "tools_seen", []) + [[t["function"]["name"] for t in kw.get("tools", [])]]
+            if len(self.seen) == 1:  # second turn: an edit_file call instead of bash
+                self.seen.append([dict(m) for m in messages])
+                self.commands.pop(0)
+                line = next(x for x in (ws / "notes.py").read_text().splitlines() if x.startswith("class "))
+                self.line = line
+                args = {"path": "notes.py", "old_text": line, "new_text": line + "  # edited"}
+                call = {"id": "e1", "type": "function", "function": {"name": "edit_file", "arguments": json.dumps(args)}}
+                return Reply(text="", tool_calls=[call], usage={"prompt_tokens": 10})
+            return super().chat(messages, **kw)
+
+    monkeypatch.setenv("LIGHTNESS_EDIT", "1")
+    run_dir = ws.parent
+    env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
+    client = EditClient(["ls", "placeholder", SUBMIT, "echo never"], NOTES)
+    TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("none")], step_limit=4).run("notes app")
+    assert client.tools_seen[0] == ["bash", "edit_file"]
+    outs = tool_outputs(client)
+    assert client.line + "  # edited" in (ws / "notes.py").read_text() and "Edited notes.py" in outs[1]
+    steps = [json.loads(line) for line in (run_dir / "steps.jsonl").read_text().splitlines()]
+    assert steps[1]["command"].startswith(f"python {loop_mod.EDIT_SCRIPT} --json <<'")

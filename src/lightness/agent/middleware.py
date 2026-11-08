@@ -221,7 +221,7 @@ TRIES_AGAIN = ("[automatic checks] {n} try commands in a row with nothing change
 CHECKS_IDLE = ("[automatic checks] All {n} checks pass and the last {steps} steps changed nothing. If something "
                "the task asks for isn't covered, add it as a check in checks.txt; otherwise submit now.")
 REWRITE_NOTE = ("[automatic checks] That wrote all {n} lines of {file} again to change {k} of them. Change just "
-                "those lines with the edit command next time (see Changing a file): seconds instead of minutes.")
+                "those lines with the edit_file tool next time (see Changing a file): seconds instead of minutes.")
 SAME_TEXT = ("[automatic checks] {files} was written again with exactly the same text as before: nothing "
              "changed. Find the line you meant to change and change just that line.")
 CHECKS_BY_HAND = ("[automatic checks] That ran checks.txt by hand: the harness already ran it after the last change "

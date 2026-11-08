@@ -712,6 +712,9 @@ times. Every stop had a new, generic cause:
   as text and bindings don't fire there (`ab95cba`).
 - A list-of-rows board passed as one comma string: the try header shows each `--kw` value with its
   type (`25fcda7`).
+- Validation checks typed `abc` into `Input(type="number")`, which drops those keys silently
+  ("(nothing changed)"): the dump says which keys an Input with `type=`/`restrict=` dropped
+  (`7a0c6ff`; loan-calc retry, stopped at step 11).
 
 **Checks that pass while the contract fails.** json-viewer's retry passed all 13 of its checks
 and only 4/10 spec tests: its #path showed `Path: $.regions`, and `expect:"$.regions"` matches any

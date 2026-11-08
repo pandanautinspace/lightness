@@ -540,6 +540,7 @@ def test_try_app_fake_clock_and_advance(tmp_path):
     assert "now: a fake clock" in out
     assert "after advance:5:\n  #display digits: '00:05.0'" in out
     assert "after advance:3:\n  (nothing changed)" in out  # paused: time doesn't count
+    assert "(the clock moved 5 s and the app's timers ran; the app read the clock" in out
     out = try_app(tmp_path, {**names, "params": []}, "advance:5")
     assert "advance needs a clock parameter, and StopwatchApp has none" in out
 

@@ -274,9 +274,10 @@ class FakeClock:
     """The App's clock parameter: a zero-argument callable returning seconds. Moves only on advance."""
 
     def __init__(self, t: float = 1000.0) -> None:
-        self.t = t
+        self.t, self.reads = t, 0
 
     def __call__(self) -> float:
+        self.reads += 1
         return self.t
 
 
@@ -495,7 +496,14 @@ async def run(cls, kw, data_files: dict[str, Path], clock: FakeClock | None, ste
                         say(f"  advance needs a clock parameter, and {cls.__name__} has none (wait:SECONDS waits in real time)")
                         continue
                     elif action == "advance":
+                        reads, start = clock.reads, clock.t
                         await advance(app, pilot, clock, float(value))
+                        # say what happened to time: "(nothing changed)" alone read as "advance didn't run
+                        # the timers" to the 35B, whose app showed a stale number (stopwatch)
+                        n = clock.reads - reads
+                        clock_note = (f"  (the clock moved {clock.t - start:g} s and the app's timers ran; the app read "
+                                      f"the clock {n} time{'s' if n != 1 else ''}" + (")" if n else
+                                      ": its timer isn't running, or the code it runs doesn't read the clock)"))
                     else:
                         say(f"  unknown step {step!r} (use type:, press:, click:, focus:, wait:, advance:, restart, "
                               "expect:, expect-not:, expect-file:)")
@@ -513,6 +521,8 @@ async def run(cls, kw, data_files: dict[str, Path], clock: FakeClock | None, ste
                         break
                     new, new_files = snapshot(app), files_now(data_files)
                     show_changes(state, new, new_files != files)
+                    if action == "advance" and clock is not None:
+                        say(clock_note)
                     show_files(data_files)
                     state, files = new, new_files
         except Exception:  # noqa: BLE001 - report any crash of the app under test

@@ -847,3 +847,63 @@ sort) ask for things the contract doesn't, and the checks arm only covers the co
 **Next:** a fifth pass from `b5e38d8` over all 9, json-viewer last, with no fixes expected to land
 mid-pass, to see first-try consistency on one code version. The full 9 × 3 bench only after a pass
 where every task finishes first time (ask the user first).
+
+### Fifth consistency pass, 2026-11-08
+
+**Method.** As pass 4: all 9 tasks in batches from `cbb0892`, `LIGHTNESS_EDIT=1 LIGHTNESS_THINK=4096`,
+`--tests checks`, qwen35a3 on AC, the stall rule, fixes between batches (column "code" is the code a
+row ran on).
+
+| task | first try | code | spec | intent | steps | wall s | out tokens |
+|---|---|---|---|---|---|---|---|
+| trip-split | finished | `cbb0892` | 7/11 | 0/3 | 21 | 447 | 14.5k |
+| airport-lookup | finished | `cbb0892` | 11/11 | 0/3 | 16 | 512 | 19.5k |
+| notepad | finished | `d750f8a` | 11/11 | 0/2 | 6 | 136 | 5.7k |
+| loan-calc | finished | `d750f8a` | 11/11 | 2/3 | 12 | 322 | 12.5k |
+| bookmarks | finished | `d750f8a` | 10/11 | 2/3 | 22 | 613 | 17.2k |
+| stopwatch | finished | `d750f8a` | 7/8 | 0/3 | 9 | 389 | 14.5k |
+| lights-out | finished | `d750f8a` | 9/9 | 2/3 | 14 | 269 | 10.4k |
+| json-viewer | stopped (step 10); retry finished | `e02fc57` | 10/10 | 0/3 | 14 | 503 | 18.8k |
+| csv-browser | stopped (steps 10, 8); third run finished | `e02fc57` | 9/11 | 0/3 | 9 | 168 | 6.6k |
+
+7 of 9 finished on their first attempt (pass 4: 8 of 9, pass 3: 3 of 9); all 9 finished within the
+pass. Spec on the first-try runs 66/72; with the two retries 85/93. json-viewer reached full spec for
+the first time (pass 3: 4/10; pass 4: never finished). Intent 6/26. Runs got longer than in pass 4
+(airport-lookup 185 → 512 s): the model now writes 15-30 checks and often rewrites checks.txt whole.
+
+**Stops and fixes.**
+
+- csv-browser: sort checks pressed `right` on a row-cursor table, 4 steps at 14/16. A key that does
+  nothing on a table (left/right on a row cursor) now says so, and such step notes are kept in a failing
+  check's report (`d750f8a`). The root cause was the kit itself: the DataTable part and the cheat sheet
+  both showed `cursor_type="row"` as the way to make a table; they now explain the choice (`8ba3eff`).
+- json-viewer: 30 checks pressing `right` to open tree nodes, stuck at 12/30 for 4 steps. The same
+  note for a Tree, one key at a time (in `press:right,down` the down hid the dead right), and step
+  notes now survive try's own cut of a long failing check (`914d907`).
+- csv-browser retry: a 15-row table filled the failing check's 15-line screen, so `#count` (what the
+  expect was about) never showed; 3 steps of CSS edits looking for it. The report now keeps every
+  widget line and cuts table/list/tree rows first (`e02fc57`).
+
+**Spec loss in finished runs, and the fix for each.**
+
+- trip-split's Add button (in the Expenses tab) was cut off by its container; the button check from
+  pass 4 skipped it because hidden tabs take no space. It now shows each tab in turn (`2f4d9bc`).
+- stopwatch lost the pause test for the third pass running; the text added in pass 4 (`bc6883f`) did
+  not change what the model wrote. Built-in check: for pairs of keys with 3 s between, the screen must
+  be the same whether or not a timer tick came first (`f3c9325`).
+- bookmarks' search left all rows shown for `PYTHON`; its checks only expected the one match:
+  checks.md now says a filter check needs two records and both sides (`af07fb0`).
+- csv-browser: the row cursor above (2 sort tests now fail fast, from `8898f3c`).
+
+**Other fixes.** loan-calc made two app changes at 0/16 with new failure text each time, so the
+"suspect the checks" nudge (which waited for identical results) never came; it now counts app changes
+that pass no more checks. Its expected payments were mental arithmetic (798.82 for 536.82); checks.md
+says to compute numbers with a command (both `af07fb0`; the model found that itself the next step).
+The exact-text hint also covers the screen's quotes around quoted text (`c3102ac`).
+
+All 9 references pass every built-in check after these changes (seed, buttons in every tab, keys
+without a tick).
+
+**Next:** a sixth pass from `c3102ac`. 7 of 9 first-try is short of the bar for the full 9 × 3 bench
+(every task first time); both misses this pass were the row cursor and tree keys, now addressed at the
+source.

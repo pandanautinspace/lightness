@@ -64,3 +64,13 @@ def test_diagnostics_dedup_and_cap():
     d = [f"a.py:{i}: undefined name 'x'" for i in range(12)] + ["a.py:0: undefined name 'x'"]
     s = diagnostics_summary(d, limit=5)
     assert s.count("undefined") == 5 and "and 7 more" in s
+
+
+def test_traceback_summary_keeps_a_syntax_errors_line_and_caret():
+    from pathlib import Path
+    from lightness.verify.compress import traceback_summary
+
+    text = ('Traceback (most recent call last):\n  File "<string>", line 5, in <module>\n'
+            '  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed\n'
+            '  File "/w/lookup.py", line 2\n    x = (1,\n        ^\nSyntaxError: \'(\' was never closed')
+    assert traceback_summary(text, Path("/w")) == "lookup.py:2:\n    x = (1,\n        ^\nSyntaxError: '(' was never closed"

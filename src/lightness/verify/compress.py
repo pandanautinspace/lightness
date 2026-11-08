@@ -10,6 +10,8 @@ from pathlib import Path
 MAX_LINES = 40
 
 _FRAME = re.compile(r'^\s*File "(?P<file>[^"]+)", line (?P<line>\d+), in (?P<func>.+)$')
+# a SyntaxError's last frame: no "in func", then the source line and a caret under the problem
+_SYNTAX_FRAME = re.compile(r'^\s*File "(?P<file>[^"]+)", line (?P<line>\d+)$')
 _PYTEST_LOC = re.compile(r"^(?P<file>[^\s:]+\.py):(?P<line>\d+): (?P<err>\w+)")
 
 
@@ -41,10 +43,20 @@ def traceback_summary(text: str, ws: Path) -> str:
         m = _FRAME.match(block[i])
         if m:
             rel = _rel(m["file"], ws)
-            code = block[i + 1].strip() if i + 1 < len(block) and not _FRAME.match(block[i + 1]) else ""
+            nxt = block[i + 1] if i + 1 < len(block) else ""
+            code = nxt.strip() if nxt and not _FRAME.match(nxt) and not _SYNTAX_FRAME.match(nxt) else ""
             if rel:
                 out.append(f"{rel}:{m['line']} in {m['func']}: {code}")
             i += 2 if code else 1
+            continue
+        m = _SYNTAX_FRAME.match(block[i])
+        if m and (rel := _rel(m["file"], ws)):
+            # airport-lookup: the start check said only "SyntaxError: invalid syntax", and the 35B rewrote the file
+            out.append(f"{rel}:{m['line']}:")
+            i += 1
+            while i < len(block) and block[i].startswith(" "):
+                out.append(block[i])
+                i += 1
             continue
         if not block[i].startswith(" "):
             out.extend(block[i:])

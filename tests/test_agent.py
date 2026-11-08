@@ -377,6 +377,17 @@ def test_kit_checks_arm_nudges_to_submit_when_idle_after_all_pass(ws):
     assert "All 1 checks pass and the last 2 steps changed nothing" in outs[2]
 
 
+def test_kit_checks_arm_says_running_passing_checks_by_hand_tells_nothing_new(ws):
+    checks = write("checks.txt", "empty: expect-not:\"notes\"\n")
+    by_hand = "python .lightness/kit/try_app.py --checks checks.txt > /dev/null 2>&1; true"
+    run_dir = ws.parent
+    env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
+    client = KitClient([checks, by_hand, SUBMIT, "echo never"], NOTES)
+    TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("checks")], step_limit=4).run("notes app")
+    outs = tool_outputs(client)
+    assert "That ran checks.txt by hand" not in outs[0] and "That ran checks.txt by hand" in outs[1]
+
+
 def test_checks_report_shows_every_malformed_line():
     results = {f"bad{i}": f"not run: 'x{i}' is not a step" for i in range(6)} | {"ok": None, "run": "FAILED expect:y"}
     text = mw.checks_text(results, [])

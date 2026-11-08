@@ -219,6 +219,9 @@ TRIES_AGAIN = ("[automatic checks] {n} try commands in a row with nothing change
                "have seen into checks.txt, or change the app.")
 CHECKS_IDLE = ("[automatic checks] All {n} checks pass and the last {steps} steps changed nothing. If something "
                "the task asks for isn't covered, add it as a check in checks.txt; otherwise submit now.")
+CHECKS_BY_HAND = ("[automatic checks] That ran checks.txt by hand: the harness already ran it after the last change "
+                  "and all {n} pass, so this tells you nothing new. Submit now, or add a check for anything the task "
+                  "asks that checks.txt doesn't cover yet.")
 CHECKS_FAIL_HINT = ("Each check started a fresh app: it sees nothing another check did. For each failure, decide "
                     "first whether the check or the app disagrees with the task (the screen it shows is what the "
                     "app does); fix that one, not both.")
@@ -351,9 +354,18 @@ class Kit(Middleware):
             notes.append(report)
         if self.tests == "checks" and (idle := self._idle_after_pass(ctx, sig)):
             notes.append(idle)
+        elif self.tests == "checks" and "--checks" in command and self._all_pass(ctx):
+            # after every check passed, the 35B reran them by hand for 3-4 steps (stopwatch, lights-out)
+            ctx.log("kit.checks_by_hand")
+            notes.append(CHECKS_BY_HAND.format(n=len(ctx.data["kit.checks"])))
         elif self.tests == "checks" and (tries := self._tries_in_a_row(ctx, command, sig)):
             notes.append(tries)
         return shorten_paths("\n\n".join(notes), ctx.ws, ctx.run_dir) if notes else None
+
+    @staticmethod
+    def _all_pass(ctx: Ctx) -> bool:
+        checks = ctx.data.get("kit.checks") or {}
+        return bool(checks) and all(v is None for v in checks.values())
 
     def _tries_in_a_row(self, ctx: Ctx, command: str, sig: str) -> str | None:
         """Try commands in a row that change nothing while checks fail: after three, say what checks are for."""

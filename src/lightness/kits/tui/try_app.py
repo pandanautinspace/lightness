@@ -193,7 +193,9 @@ def grid(widget) -> list[str] | None:
     if same_text:
         lines.insert(0, f"  (every cell shows {texts[0]!r}; drawn by CSS class instead)")
     if common - {"-highlight"}:  # a state every cell has (an all-lit board) is still state: name it
-        lines.append(f"  every cell has class: {', '.join(sorted(common))}")
+        # one line, not 25: the 35B then probed for "class cell: #cell-0-4" for 3 steps; say how to check it
+        lines.append(f"  every cell has class: {', '.join(sorted(common))} (listed once here, not per cell; check it "
+                     f"with expect:\"every cell has class\")")
     # which cell has which class (a cursor, lit cells, a selection), one line per cell so a check can
     # expect "class on: #cell-0-1"; listing only classes 1-2 cells had left 3+ lit cells uncheckable
     counts = Counter(c for cell in cells for c in set(cell.classes) - common)

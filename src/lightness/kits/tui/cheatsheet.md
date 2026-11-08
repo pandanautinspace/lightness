@@ -32,6 +32,7 @@
   (no `tree.highlighted`); empty a node with `node.remove_children()` (no `clear_children`), or the
   whole tree with `tree.clear()`. Tree keys: `up`/`down` move through the visible rows,
   `space` opens/closes a node, `enter` selects (and toggles); plain `left`/`right` do nothing.
+  A node's type is `TreeNode` (`from textual.widgets.tree import TreeNode`); there is no `Tree.Node`.
 - `ListView`: `await lv.clear()`, `await lv.append(ListItem(Label(text)))`, `await lv.extend(...)`,
   `lv.index`, `lv.highlighted_child`; events `ListView.Selected` (enter) and `ListView.Highlighted`.
   After clear + extend, `index` is `None`: set it again.

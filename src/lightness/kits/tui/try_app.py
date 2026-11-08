@@ -919,7 +919,7 @@ async def unclickable_buttons(cls, kw, focus: str | None, keys: list[str]) -> tu
     """(any button seen, {(screen, id): problem}): every Button with an id on the start screen and on each screen a key
     opens must be clickable. bookmarks (passes 2 and 4): the dialog's Cancel was cut off, the model's
     check focused it and pressed enter, and a click (as a user, or the hidden tests, would do) missed."""
-    from textual.widgets import Button
+    from textual.widgets import Button, TabbedContent, TabPane
 
     seen, problems = False, {}
     where = f" with {focus} focused" if focus else ""
@@ -939,6 +939,17 @@ async def unclickable_buttons(cls, kw, focus: str | None, keys: list[str]) -> tu
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause()
         check("on the start screen")
+        # buttons in tabs that aren't active take no space: show each tab in turn (trip-split pass 5: the
+        # Expenses tab's Add button was cut off; its checks pressed enter, the hidden test clicked)
+        for tabs in list(app.screen.query(TabbedContent)):
+            start = tabs.active
+            for pane in list(tabs.query(TabPane)):
+                if pane.id and pane.id != start:
+                    tabs.active = pane.id
+                    await pilot.pause()
+                    check(f"(on tab {pane.id})")
+            tabs.active = start
+            await pilot.pause()
         base = app.screen
         for key in keys:
             if focus == NO_FOCUS:

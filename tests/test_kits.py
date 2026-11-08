@@ -1266,3 +1266,19 @@ def test_start_check_lists_every_use_of_a_missing_class_attribute(tmp_path):
     assert smoke.same_missing_attr(tmp_path, {"module": "j"}, crash) == [
         "warning: Tree.Node doesn't exist, and j.py uses it on lines 5, 7: change them all now."]
     assert smoke.same_missing_attr(tmp_path, {"module": "j"}, [smoke.SmokeResult(True, "starting")]) == []
+
+
+def test_try_app_builtin_button_check_looks_in_every_tab(tmp_path):
+    app = ("from textual.app import App\nfrom textual.containers import Container\n"
+           "from textual.widgets import Button, Input, TabbedContent, TabPane\n\n\nclass T(App):\n"
+           "    CSS = '#box { height: BOX; }'\n\n    def compose(self):\n        with TabbedContent():\n"
+           "            with TabPane('One', id='one'):\n                yield Input(id='a')\n"
+           "            with TabPane('Two', id='two'):\n                with Container(id='box'):\n"
+           "                    yield Input(id='b')\n                    yield Input(id='c')\n"
+           "                    yield Button('Add', id='add')\n")
+    names = {"module": "t", "app_class": "T", "params": []}
+    (tmp_path / "t.py").write_text(app.replace("BOX", "auto"))
+    assert "PASS harness: every button can be clicked" in try_app(tmp_path, names, "--builtin")
+    (tmp_path / "t.py").write_text(app.replace("BOX", "4"))
+    out = try_app(tmp_path, names, "--builtin")
+    assert "FAIL harness: every button can be clicked\n    #add (on tab two) can't be clicked" in out

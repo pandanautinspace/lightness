@@ -12,7 +12,8 @@ notifications, then the contents of each data file. A crash prints the error.
 
 {params}
 
-- Steps: `type:TEXT`, `press:KEY,KEY,...` (enter, space, up, down, tab, escape, ctrl+q, letters),
+- Steps: `type:TEXT`, `press:KEY,KEY,...` (enter, space, up, down, tab, escape, ctrl+q, letters;
+  `KEY*N` presses it N times, e.g. `press:down*5`),
   `click:#id`, `focus:#id`, `wait:SECONDS` (real time), `advance:SECONDS` (moves the fake clock
   forward, then lets the app's timers run), `restart` (start again with the same files).
 - To replace what an input holds: `focus:#id press:end,ctrl+u type:NEW` (ctrl+u clears to the left).

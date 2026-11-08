@@ -4,7 +4,7 @@ Copied into the workspace by the harness; the model runs it instead of writing t
 
     python .lightness/kit/try_app.py [--file NAME=PATH] [--file-text NAME=TEXT] [--kw NAME=VALUE] STEP ...
 
-Steps: type:TEXT  press:KEY[,KEY...]  click:#id  focus:#id  wait:SECONDS  advance:SECONDS  restart
+Steps: type:TEXT  press:KEY[,KEY...] (KEY*N repeats it, e.g. down*5)  click:#id  focus:#id  wait:SECONDS  advance:SECONDS  restart
        expect:TEXT  expect-not:TEXT  expect-file:PARAM=TEXT
 After the start and after each step it prints what changed (visible widgets, focus, screen,
 notifications, any crash) and the contents of each data file the app keeps.
@@ -110,7 +110,7 @@ def describe(widget) -> list[str]:
         start = max(0, min(at - ROWS // 2, len(lines) - ROWS))
         shown = ([f"  … {start} rows above"] if start else []) + lines[start:start + ROWS]
         below = len(lines) - start - ROWS
-        return [f"{name(widget)} tree, {len(lines)} rows (up/down move one row):"] + shown + (
+        return [f"{name(widget)} tree, {len(lines)} rows (up/down move one row; press:down*K moves K rows):"] + shown + (
             [f"  … {below} more"] if below > 0 else [])
     if "TextArea" in bases:
         return [f"{name(widget)} text (cursor {widget.cursor_location}): {cut(widget.text)!r}"]
@@ -470,7 +470,7 @@ async def run(cls, kw, data_files: dict[str, Path], clock: FakeClock | None, ste
                     if action == "type":
                         await pilot.press(*value)
                     elif action == "press":
-                        await pilot.press(*[k.strip() for k in value.split(",") if k.strip()])
+                        await pilot.press(*keys_of(value))
                     elif action in ("click", "focus") and not app.screen.query(value):
                         ids = sorted(f"#{w.id}" for w in app.screen.query("*") if w.id and not w.id.startswith("-"))
                         say(f"  no widget matches {value!r} on this screen; ids here: {', '.join(ids) or 'none'}")
@@ -643,12 +643,29 @@ SELECTOR = re.compile(r"^#[\w-]+(\.[\w-]|:[a-z]|\[| *> )")
 CLASS_LIKE = re.compile(r"^(\.[\w-]+$|#[\w-]+(\.[\w-]|:[a-z]|\[| *> ))")  # one bare .class, or a compound selector
 STEP_NAMES = ("type", "press", "click", "focus", "wait", "advance", "expect", "expect-not", "expect-file")
 OPTIONS = ("--file", "--file-text", "--kw", "--data", "--data-from")
+# a step glued to the one before by a comma (press:down,down,press:enter): the 35B read "one step per word"
+# as "no commas" and swapped every comma for a space, then back
+NEW_STEP = ("a new step starts a new word: keys inside one press: are separated by commas (press:down,down,enter), "
+            "and the next step comes after a space (press:down*2 expect:x); quote text with spaces, e.g. "
+            "type:\"My Site\"")
 
 
 def key_names() -> set[str]:
     from textual import keys
     return ({k.value for k in keys.Keys} | set(keys.KEY_ALIASES) | {"space", "enter", "tab", "escape"}
             | {keys._character_to_key(chr(c)) for c in range(33, 127)})
+
+
+REPEAT = re.compile(r"^(.+)\*(\d+)$")
+
+
+def keys_of(value: str) -> list[str]:
+    """The keys of a press: step, with KEY*N repeated N times (counting 15 downs by hand goes wrong)."""
+    keys = []
+    for k in (k.strip() for k in value.split(",")):
+        m = REPEAT.match(k) if k != "*" else None
+        keys += [m.group(1)] * int(m.group(2)) if m else [k] if k else []
+    return keys
 
 
 def valid_key(key: str, names: set[str]) -> bool:
@@ -679,8 +696,7 @@ def lint(tokens: list[str], files: list[str] | None = None) -> list[str]:
         elif tok == "restart":
             pass
         elif re.search(r",(type|press|click|focus|expect|expect-not|expect-file|wait|advance):", tok):
-            problems.append(f"{tok[:50]!r}: one step per word; write steps separated by spaces (and quote text "
-                            "with spaces), e.g. type:\"My Site\" press:tab type:https://a.com")
+            problems.append(f"{tok[:50]!r}: " + NEW_STEP)
         elif ":" not in tok or tok.split(":", 1)[0] not in STEP_NAMES:
             problems.append(f"{tok!r} is not a step: text with spaces needs quotes, e.g. type:\"two words\"")
         else:
@@ -695,11 +711,11 @@ def lint(tokens: list[str], files: list[str] | None = None) -> list[str]:
                                 f"(they are: {', '.join(files) or 'none'})")
             elif action == "press" and value.startswith("#"):
                 problems.append(f"{tok!r}: press takes key names; to press a button, click:{value}")
-            elif action == "press" and (bad := [k for k in value.split(",") if k.strip() and not valid_key(k.strip(), NAMES)]):
+            elif action == "press" and (bad := [k for k in dict.fromkeys(keys_of(value)) if not valid_key(k, NAMES)]):
                 problems.append(f"{tok!r}: {', '.join(map(repr, bad))} is not a key (keys: a, enter, tab, escape, space, up, "
                                 f"ctrl+s, ...; to press a button, click:#id)")
             elif re.search(r",(type|press|click|focus|expect|expect-not|expect-file|wait|advance):", value):
-                problems.append(f"{tok!r}: one step per word; write steps separated by spaces, e.g. type:a press:tab type:b")
+                problems.append(f"{tok[:50]!r}: " + NEW_STEP)
         i += 1
     return problems
 

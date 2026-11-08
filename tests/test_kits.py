@@ -913,8 +913,23 @@ def test_lint_rejects_unknown_keys_and_glued_steps():
     from lightness.kits.tui.try_app import lint
 
     assert "'bm-save' is not a key" in " ".join(lint(shlex.split("press:bm-save")))
-    assert "one step per word" in " ".join(lint(shlex.split("type:A,type:B")))
+    assert "a new step starts a new word" in " ".join(lint(shlex.split("type:A,type:B")))
+    assert "a new step starts a new word" in " ".join(lint(shlex.split("press:down,down,press:enter")))
     assert lint(shlex.split('press:ctrl+s,enter press:comma press:shift+tab type:"a,b" press:down,space')) == []
+    assert lint(shlex.split("press:down*15,enter press:asterisk")) == []
+    assert "'nokey' is not a key" in " ".join(lint(shlex.split("press:nokey*3")))
+
+
+def test_try_app_press_repeats_a_key(tmp_path):
+    from lightness.kits.tui.try_app import keys_of
+
+    assert keys_of("down*3,enter") == ["down", "down", "down", "enter"] and keys_of("*") == ["*"]
+    (tmp_path / "c.py").write_text(
+        "from textual.app import App\nfrom textual.widgets import Static\n\n\nclass C(App):\n"
+        "    BINDINGS = [('down', 'inc')]\n    n = 0\n\n    def compose(self):\n        yield Static('0', id='n')\n\n"
+        "    def action_inc(self):\n        self.n += 1\n        self.query_one('#n').update(str(self.n))\n")
+    out = try_app(tmp_path, {"module": "c", "app_class": "C", "params": []}, "press:down*7", "expect:7")
+    assert "ok: expect:7" in out
 
 
 def test_lint_rejects_file_names_where_parameter_names_go():
@@ -935,7 +950,7 @@ def test_try_app_tree_rows_are_numbered_and_follow_the_cursor(tmp_path):
         "        t = self.query_one(Tree)\n        for i in range(40):\n            t.root.add_leaf(f'n{i}')\n"
         "        t.root.expand()\n        t.focus()\n")
     out = try_app(tmp_path, {"module": "t", "app_class": "T", "params": []}, "press:" + ",".join(["down"] * 30))
-    assert "#tree tree, 41 rows (up/down move one row):" in out
+    assert "#tree tree, 41 rows (up/down move one row; press:down*K moves K rows):" in out
     assert "[30]     n29 ◀ cursor" in out and "rows above" in out
 
 

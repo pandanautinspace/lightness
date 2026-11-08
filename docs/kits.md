@@ -907,3 +907,44 @@ without a tick).
 **Next:** a sixth pass from `c3102ac`. 7 of 9 first-try is short of the bar for the full 9 × 3 bench
 (every task first time); both misses this pass were the row cursor and tree keys, now addressed at the
 source.
+
+### Sixth consistency pass, 2026-11-08
+
+**Method.** As passes 4-5, from `c3102ac`; fixes between batches.
+
+| task | first try | code | spec | intent | steps | wall s | out tokens |
+|---|---|---|---|---|---|---|---|
+| json-viewer | finished | `c3102ac` | 10/10 | 1/3 | 16 | 344 | 13.7k |
+| csv-browser | finished | `c3102ac` | 10/11 (11/11 on the fixed test) | 0/3 | 10 | 111 | 4.1k |
+| stopwatch | finished | `c3102ac` | 8/8 | 0/3 | 13 | 454 | 16.5k |
+| trip-split | finished | `c3102ac` | 11/11 | 1/3 | 9 | 204 | 6.7k |
+| bookmarks | finished | `c3102ac` | 11/11 | 0/3 | 9 | 443 | 12.7k |
+| lights-out | finished | `c3102ac` | 9/9 | 1/3 | 9 | 161 | 7.0k |
+| notepad | finished | `bf8b7f1` | 8/11 | 0/2 | 8 | 125 | 4.9k |
+| airport-lookup | finished | `bf8b7f1` | 11/11 | 0/3 | 7 | 126 | 4.4k |
+| loan-calc | stopped (step 8); retry finished | `bf8b7f1` | 10/11 | 1/3 | 10 | 192 | 7.7k |
+
+8 of 9 first try, all 9 within the pass. Spec 88/93 (89/93 counting csv-browser on the fixed test),
+the best so far; json-viewer, stopwatch (the pause test, lost in passes 3-5) and csv-browser's sort
+tests all pass now. Runs were shorter than in pass 5 (7-16 steps, 111-454 s).
+
+**Stop.** loan-calc spent 4 steps grepping try_app.py for an `expect-class` step to check `-invalid`:
+checks.md now says CSS classes are on the widget's line and are checked with `expect:` (`bf8b7f1`).
+
+**Fixes between batches.**
+
+- csv-browser's spec test for sorting a date column wanted the first four values non-empty, which
+  depends on where empty cells sort; that is the intent test's question, not the contract's. The spec
+  test ignores empty cells now (oracle 14/14; `585a14f`).
+- The shell imports `on` (4 runs crashed on `@on` without it; `5ffc0f7`).
+- `expect:"#id 'text'"` without the colon is taken as `#id: 'text'`: json-viewer dropped the colon in
+  nearly every run and kept it dropped after the hint named the right form (`8994010`).
+- **A false pass:** notepad's `status.update("[modified]")` showed nothing (markup), and its check
+  `expect:"modified"` passed on the dump's markup note, which quotes the lost text; 3 spec tests
+  failed. Expects no longer match the harness's own notes (`c8b2acd`).
+
+**Remaining spec loss:** loan-calc accepted 2.5 years (the contract asks for a whole number; its checks
+never tried a fraction); notepad's false pass above.
+
+**Next:** a seventh pass from `c8b2acd`. If every task finishes first time, the full 9 × 3 bench
+(asking the user first).

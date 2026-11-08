@@ -434,7 +434,7 @@ class Kit(Middleware):
             ctx.data["kit.smoke_ok"] = all(r.ok for r in results)
             if results:
                 warnings = (smoke.undefined_names(ctx.ws, names) + smoke.clashes(ctx.ws, names)
-                            + smoke.screen_results(ctx.ws, names))
+                            + smoke.screen_results(ctx.ws, names) + smoke.same_missing_attr(ctx.ws, names, results))
                 text = "\n".join(x for x in [smoke.summarize(results, f"{names['module']}.py"), *warnings] if x)
                 previous, ctx.data["kit.smoke"] = ctx.data.get("kit.smoke"), text
                 ctx.log("smoke", ok=all(r.ok for r in results), warnings=len(warnings))

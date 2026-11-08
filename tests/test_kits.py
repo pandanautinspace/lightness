@@ -1255,3 +1255,14 @@ def test_try_app_builtin_check_every_button_can_be_clicked(tmp_path):
     out = try_app(tmp_path, names, "--builtin")
     assert "FAIL harness: every button can be clicked\n    #ok (after pressing a" in out
     assert "on Ask) can't be clicked" in out
+
+
+def test_start_check_lists_every_use_of_a_missing_class_attribute(tmp_path):
+    from lightness.kits import smoke
+
+    (tmp_path / "j.py").write_text("from textual.widgets import Tree\n\n\nclass A:\n"
+                                   "    def f(self, n: Tree.Node): pass\n\n    def g(self, n: Tree.Node): pass\n")
+    crash = [smoke.SmokeResult(False, "starting", "AttributeError: type object 'Tree' has no attribute 'Node'")]
+    assert smoke.same_missing_attr(tmp_path, {"module": "j"}, crash) == [
+        "warning: Tree.Node doesn't exist, and j.py uses it on lines 5, 7: change them all now."]
+    assert smoke.same_missing_attr(tmp_path, {"module": "j"}, [smoke.SmokeResult(True, "starting")]) == []

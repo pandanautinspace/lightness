@@ -253,6 +253,25 @@ def undefined_names(ws: Path, names: dict) -> list[str]:
     return [f"warning: {path.name} uses names it never imports or defines: {listed}. Import them all now."]
 
 
+def same_missing_attr(ws: Path, names: dict, results: list[SmokeResult]) -> list[str]:
+    """For a start crash "type object 'X' has no attribute 'Y'": every line that uses X.Y, so all get fixed in
+    one change (json-viewer, twice: Tree.Node annotations fixed one crash per step, 3-4 steps)."""
+    path = ws / f"{names['module']}.py"
+    found = {m.groups() for r in results if not r.ok
+             for m in re.finditer(r"type object '(\w+)' has no attribute '(\w+)'", r.detail)}
+    try:
+        lines = path.read_text().splitlines()
+    except OSError:
+        return []
+    out = []
+    for owner, attr in sorted(found):
+        at = [str(i) for i, line in enumerate(lines, 1) if re.search(rf"\b{owner}\.{attr}\b", line)]
+        if len(at) > 1:
+            out.append(f"warning: {owner}.{attr} doesn't exist, and {path.name} uses it on lines {', '.join(at)}: "
+                       "change them all now.")
+    return out
+
+
 def screen_results(ws: Path, names: dict) -> list[str]:
     """Warnings for `x = await self.push_screen(screen)`: awaiting push_screen only waits until the
     screen is shown and gives None, so the dialog's result is silently lost (the 35B spent steps on

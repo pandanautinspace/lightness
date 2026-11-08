@@ -876,6 +876,10 @@ def test_try_app_grid_of_same_text_cells_is_drawn_by_class(tmp_path):
     out = try_app(tmp_path, {"module": "g", "app_class": "G", "params": []}, "expect:class on: #c2")
     assert "(every cell shows '.'; drawn by CSS class instead)\n    on  on\n    on  off" in out
     assert "class on: #c0 (row 0, col 0)\n    class on: #c1 (row 0, col 1)" in out and "ok: expect:class on: #c2" in out
+    (tmp_path / "h.py").write_text((tmp_path / "g.py").read_text().replace("'cell on' if i < 3 else 'cell off'", "'cell on'")
+                                   .replace("class G", "class H"))
+    out = try_app(tmp_path, {"module": "h", "app_class": "H", "params": []})
+    assert "every cell has class: cell, on" in out  # an all-lit board still says it is lit
 
 
 def test_try_app_tabs_line_names_how_to_switch(tmp_path):
@@ -920,6 +924,8 @@ def test_lint_rejects_unknown_keys_and_glued_steps():
     assert lint(shlex.split('press:ctrl+s,enter press:comma press:shift+tab type:"a,b" press:down,space')) == []
     assert lint(shlex.split("press:down*15,enter press:asterisk")) == []
     assert "types the word 'enter'; to press the key, press:enter" in " ".join(lint(shlex.split("type:enter")))
+    assert "not a Python literal once the line is split" in " ".join(lint(shlex.split('--kw board=["#.","..",]')))
+    assert lint(shlex.split("""--kw 'board=["#.", ".."]' --kw seed=3 --kw "items=['a', 'b']" """)) == []
     assert lint(shlex.split('type:"enter the code" type:Tabby')) == []
     assert "'nokey' is not a key" in " ".join(lint(shlex.split("press:nokey*3")))
 

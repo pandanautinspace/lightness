@@ -168,6 +168,8 @@ def grid(widget) -> list[str] | None:
     lines = ["  " + " ".join(t.ljust(width) for t in labels[i:i + cols]).rstrip() for i in range(0, len(labels), cols)]
     if same_text:
         lines.insert(0, f"  (every cell shows {texts[0]!r}; drawn by CSS class instead)")
+    if common - {"-highlight"}:  # a state every cell has (an all-lit board) is still state: name it
+        lines.append(f"  every cell has class: {', '.join(sorted(common))}")
     # which cell has which class (a cursor, lit cells, a selection), one line per cell so a check can
     # expect "class on: #cell-0-1"; listing only classes 1-2 cells had left 3+ lit cells uncheckable
     counts = Counter(c for cell in cells for c in set(cell.classes) - common)
@@ -704,6 +706,13 @@ def lint(tokens: list[str], files: list[str] | None = None) -> list[str]:
         if opt in OPTIONS:
             value = tok.split("=", 1)[1] if "=" in tok else (tokens[i + 1] if i + 1 < len(tokens) else "")
             param = value.split("=", 1)[0]
+            if opt == "--kw" and (literal := value.split("=", 1)[1] if "=" in value else "").strip()[:1] in ("[", "{", "("):
+                try:
+                    ast.literal_eval(literal)
+                except (ValueError, SyntaxError):
+                    # the line's own quoting ate the quotes inside (--kw board=["#.", ...] → [#., ...])
+                    problems.append(f"--kw {value[:50]}: not a Python literal once the line is split (quotes inside "
+                                    f"were removed); wrap the whole option in single quotes: --kw '{param}=[\"a\", \"b\"]'")
             if files is not None and opt in ("--file", "--file-text") and param not in files:
                 problems.append(f"{opt} {param}=...: {param!r} is not a file parameter of the App "
                                 f"(they are: {', '.join(files) or 'none'})")

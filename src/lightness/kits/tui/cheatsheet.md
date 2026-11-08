@@ -9,6 +9,10 @@
 - `Input.Submitted` has `.input`, `.value`, `.validation_result`; handler
   `on_input_submitted(self, event)`. Clear with `event.input.value = ""`. Scope with
   `@on(Input.Submitted, "#id")`.
+- Validation: `Input(validators=[Number(minimum=0)])` or `Integer(minimum=1)` (a positive whole number)
+  from `textual.validation`; the Input gets the `-invalid` class by itself while its value fails. A rule
+  of your own: `class Whole(Validator): def validate(self, value): return self.success() if ... else
+  self.failure("why")` (no `self.error`).
 - CSS classes: `widget.add_class("x")`, `widget.remove_class("x")`, `widget.set_class(flag, "x")`
   (on when flag is true). `widget.classes` is a read-only frozenset: no `.add`/`.discard`.
 - Events have no `.node`. The widget that sent a message is `event.control` (any widget message:

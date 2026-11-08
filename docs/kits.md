@@ -543,3 +543,68 @@ about 1 in 9.
 `LIGHTNESS_THINK=2048`; (2) steer edits toward small in-place changes instead of whole-file
 rewrites. Then a third consistency pass over all 9, and the full 9 × 3 bench only once a
 pass finishes every task first time.
+
+### Speed experiment A: thinking budget 2048 vs 4096, 2026-11-07 (interim)
+
+Method: the slow tasks at `LIGHTNESS_THINK=2048`, one run each, compared with their pass-2 run at
+4096, using the same stall rule (stop at 3+ stuck steps, fix, rotate). `scripts/run_stats.py` now
+also prints decode speed (`7586bae`). **Decode speed is a confounder:** on battery in Low Power
+Mode the 35B decodes at ~27-33 tok/s, on AC at ~50-57 tok/s, and pass 2 had both. Wall times are
+only compared at a similar tok/s; output tokens are compared always.
+
+Completed runs (pass 2 at 4096 → this run at 2048):
+
+| task | code | spec | out tokens | wall s (tok/s) | app rewrites | think cut | thinking chars |
+|---|---|---|---|---|---|---|---|
+| trip-split | `7586bae` (= pass 2) | 11/11 → 11/11 | 18.1k → 17.2k | 708 (32) → 734 (31) | 3 → 5 | 1 → 1 | 28.9k → 18.6k |
+| stopwatch | `7586bae` (= pass 2) | 6/8 → 6/8 | 15.5k → 9.7k | 711 (27) → 418 (32) | 5 → 5 | 1 → 0 | 33.5k → 10.7k |
+| bookmarks | `d343ab6` | 11/11 → 11/11 | 23.3k → 14.4k | 753 (50) → 419 (51) | 4 → 4 | 1 → 0 | 34.7k → 11.2k |
+| lights-out | `06c90af` | 8/9 → 9/9 | 28.6k → 9.4k | 1086 (29) → 224 (53) | 4 → 2 | 1 → 0 | 58.0k → 12.1k |
+
+Stopped runs: 9 (json-viewer 4 times at 2048, bookmarks twice, lights-out once; and two 4096
+controls on the fixed code, lights-out and bookmarks). Each stop had a harness gap behind it,
+fixed in `f61388d` … `3268916` (below).
+
+**Findings.** At 2048 the thinking per step roughly halves and, in 3 of 4 completed runs, total
+output drops by 37-67% with the same or a better spec score. Commands don't shrink: the model
+spends the same on whole-file rewrites (trip-split rewrote the app 5 times instead of 3).
+Thinking is still cut off in about half the runs (1 per run at most), so 2048 doesn't remove
+cut-offs, it makes each one cheaper. But **the comparison is not clean**: bookmarks and
+lights-out ran on code with this session's fixes, and json-viewer never finished at 2048 (4
+attempts; the last stall, probing tree rows one try at a time past two nudges, followed a
+thinking cut-off). Whether 2048 adds stalls can't be told from these runs, so the default stays
+4096 until paired runs on the same code settle it.
+
+**Stalls found and fixed** (each stopped a run; all generic to the tui category):
+
+- 12 of 18 checks "not run" (lint errors), the report said only "4 of 18 pass", and the model
+  rewrote the app twice: the summary now counts checks that didn't run and says an app change
+  can't fix them (`f61388d`).
+- Exploring tree keys one try at a time past the single tries nudge: the nudge now asks to
+  write what was learned into checks.txt and repeats briefly on each further try (`76c6813`).
+  Not enough on its own (json-viewer run 4 ignored it twice).
+- A grid of cells that all render `.` while CSS classes hold the state was drawn as all dots;
+  only classes 1-2 cells had were listed. The grid is now drawn by class when the text doesn't
+  vary (`4d849aa`), and every cell of a class gets its own line, rarest class first (`1144ba1`),
+  so `expect:"class on: #cell-0-1"` works with any number of lit cells.
+- `widget.text = ...` on a Static silently does nothing (`b55c5f3`); a value parameter
+  (`board=[...]`) once classified as a data file (`f981836`).
+- List + modal apps: `list_actions`' async `refresh_view` vs `modal`'s sync callback led to
+  `call_from_thread`, an unawaited call and `create_task` in turn. The modal part's callback is
+  now `async def`, and the cheat sheet says where `call_from_thread` belongs (`55079ea`).
+- Hand-counted `press:down,down,...` (up to 27) miscounted, and the model then changed the app's
+  tree expansion to fit its checks: `press:down*15` repeats a key, and a step glued on with a
+  comma gets a message naming the fix (`06c90af`).
+- After all checks passed, running `try_app --checks` by hand for 3-4 steps (stopwatch,
+  lights-out): that now gets "nothing new: submit or add a check" (`d343ab6`).
+- A failing check's detail showed its last 15 lines, which a long tree dump filled, cutting the
+  `FAILED expect...` line: it now starts at the first FAILED line (`023bd3b`).
+- checks.txt rewritten byte-identically twice (meant as a one-line fix), with no report since
+  nothing changed: an identical rewrite of the app or checks.txt is now said so (`3268916`).
+
+**Not the harness:** stopwatch's 2 lost spec tests are rounding, not missing checks: the app
+prints tenths with `:04.1f` (3.0625 → `00:03.1`) and the hidden tests expect truncation
+(`00:03.0`, `10:00.0`). The contract only says "tenths", so the task is ambiguous there.
+
+**Next:** experiment B (small in-place edits) as a switch, so B-off and B-on run on the same
+code at 4096; the B-off runs double as A's 4096 controls.

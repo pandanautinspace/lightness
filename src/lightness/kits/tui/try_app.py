@@ -110,7 +110,7 @@ def describe(widget) -> list[str]:
         start = max(0, min(at - ROWS // 2, len(lines) - ROWS))
         shown = ([f"  … {start} rows above"] if start else []) + lines[start:start + ROWS]
         below = len(lines) - start - ROWS
-        return [f"{name(widget)} tree, {len(lines)} rows (up/down move one row; press:down*K moves K rows):"] + shown + (
+        return [f"{name(widget)} tree, {len(lines)} rows (up/down move one row, space opens/closes its node, left/right do nothing; press:down*K moves K rows):"] + shown + (
             [f"  … {below} more"] if below > 0 else [])
     if "TextArea" in bases:
         return [f"{name(widget)} text (cursor {widget.cursor_location}): {cut(widget.text)!r}"]

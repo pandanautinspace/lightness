@@ -960,7 +960,7 @@ def test_try_app_tree_rows_are_numbered_and_follow_the_cursor(tmp_path):
         "        t = self.query_one(Tree)\n        for i in range(40):\n            t.root.add_leaf(f'n{i}')\n"
         "        t.root.expand()\n        t.focus()\n")
     out = try_app(tmp_path, {"module": "t", "app_class": "T", "params": []}, "press:" + ",".join(["down"] * 30))
-    assert "#tree tree, 41 rows (up/down move one row; press:down*K moves K rows):" in out
+    assert "#tree tree, 41 rows (up/down move one row, space opens/closes its node, left/right do nothing; press:down*K moves K rows):" in out
     assert "[30]     n29 ◀ cursor" in out and "rows above" in out
 
 

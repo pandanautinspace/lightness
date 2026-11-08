@@ -27,6 +27,10 @@ plus three that check what is there at that point:
 
 Quote a step that has spaces: `expect:"total: 3"`. Lines starting with `#` are comments.
 
+`expect:` matches any part of the screen, so `expect:"$.a"` also passes when the widget shows `Path: $.a`.
+When the task gives a widget's exact text, check all of it the way the screen prints it, id and quotes
+included: `expect:"#path: '$.a'"` passes only if #path shows exactly `$.a`.
+
 {example}
 
 Each check is independent: it starts a fresh app, with no records unless its own steps add them

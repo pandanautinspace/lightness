@@ -52,7 +52,8 @@
 - Change what a `Static` or `Label` shows with `widget.update("new text")`; read it back as `widget.content`.
   There is no `.text`: assigning `widget.text = ...` raises no error and changes nothing on screen.
 - Text in a `Static`/`Label` is markup: `[modified]` or `[x]` is read as a style tag and disappears. To show
-  brackets, create it with `markup=False` or pass `rich.markup.escape(text)`.
+  brackets, create the widget with `Static("", markup=False)`, or call `update(rich.markup.escape(text))`;
+  `update()` itself takes no `markup=` argument (TypeError).
 - `self.notify(text, severity="error", markup=False)` for messages containing user data.
 - Don't name attributes after Textual's own (`visible`, `display`, `size`, `region`, `children`,
   `parent`, `name`, `id`, `classes`, `styles`, `screen`, `app`): it breaks the widget.

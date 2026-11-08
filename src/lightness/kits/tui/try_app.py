@@ -145,8 +145,10 @@ def describe(widget) -> list[str]:
     if isinstance(source, str) and "[" in source and plain(widget.render()).strip() != source.strip() \
             and any(not_a_style(tag) for tag in re.findall(r"\[([^\]/][^\]]*)\]", source)):
         # "[modified]" set on a Static is read as a markup tag and shows nothing (the 35B, notepad)
-        lost = f" (its text {cut(source)!r} was read as markup: [..] is a style tag; to show brackets, " \
-               f"Static(..., markup=False) or rich.markup.escape(text))"
+        # (the 35B read "Static(..., markup=False)" as an update() argument: say where it goes)
+        lost = f" (its text {cut(source)!r} was read as markup: [..] is a style tag; to show brackets, create " \
+               f"the widget with Static('', markup=False), or update(rich.markup.escape(text)); update() itself " \
+               f"has no markup argument)"
     else:
         lost = ""
     if not text:  # an empty widget the task names (has an id) is shown, so "empty" differs from "missing"

@@ -517,3 +517,31 @@ def test_edit_file_tool_is_offered_with_the_switch_and_runs_as_the_kit_edit_comm
     assert client.line + "  # edited" in (ws / "notes.py").read_text() and "Edited notes.py" in outs[1]
     steps = [json.loads(line) for line in (run_dir / "steps.jsonl").read_text().splitlines()]
     assert steps[1]["command"].startswith(f"python {loop_mod.EDIT_SCRIPT} --json <<'")
+
+
+def test_a_runaway_command_is_not_run_and_is_shortened_in_the_transcript(ws):
+    runaway_cmd = "cat <<'EOF' > checks.txt\nx: press:" + "space," * 500 + "enter\nEOF"
+    a, client = agent(ws, [runaway_cmd, "ls", SUBMIT])
+    a.run("task")
+    outs = tool_outputs(client)
+    assert outs[0].startswith("Not run: the command repeated") and "500 times" in outs[0]
+    assert not (ws / "checks.txt").exists()
+    stored = json.dumps(client.seen[1])
+    assert "shortened by the harness" in stored and "space," * 200 not in stored
+
+
+def test_a_reply_cut_at_the_output_limit_says_so(ws):
+    from lightness.agent import loop as loop_mod
+
+    class Cut(FakeClient):
+        def chat(self, messages, **kw):
+            if not self.seen:
+                self.seen.append([dict(m) for m in messages])
+                return Reply(text='{"command": "cat > a.py <<', finish_reason="length", usage={"prompt_tokens": 10})
+            return super().chat(messages, **kw)
+
+    client = Cut(["ls", SUBMIT])
+    run_dir = ws.parent
+    TranscriptAgent(client, ws, run_dir, os.environ | bench_env(), step_limit=4).run("task")
+    assert "cut off at the output limit" in client.seen[1][-1]["content"]
+    assert loop_mod.AGENT_MAX_TOKENS <= 16384

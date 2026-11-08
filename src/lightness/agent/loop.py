@@ -40,6 +40,29 @@ if os.environ.get("LIGHTNESS_EDIT"):  # speed experiment B: changes go through t
     THINK_CUT = THINK_CUT.replace("(cat > file <<'EOF' ...)", "(a new file with cat > file <<'EOF' ..., a change to "
                                   "one with the edit_file tool)")
 
+# A runaway command: one short piece repeated hundreds of times in a row (the 35B once wrote
+# "space," 9466 times, 19.5k tokens in 385 s). It isn't run, and it's collapsed in the transcript.
+RUNAWAY = re.compile(r"(.{1,20}?)\1{199,}", re.DOTALL)
+RUNAWAY_NOTE = ("Not run: the command repeated {piece!r} {n} times in a row (a runaway; it is shortened above). "
+                "Write it again without the repetition: press:KEY*N presses a key N times, and a check needs only "
+                "the steps that matter.")
+CUT_REPLY = ("[harness] Your reply was cut off at the output limit ({limit} tokens) before it finished, so it ran "
+             "nothing. Keep each command short: write a big file in parts, or change only what needs changing.")
+# Output per agent call: the thinking budget plus room for the longest command a step needs (the
+# largest seen, a whole app, was ~8k characters, ~2.5k tokens)
+AGENT_MAX_TOKENS = min(16384, THINK + 8192) if isinstance(THINK, int) and THINK is not True else 16384
+
+
+def runaway(command: str) -> tuple[str, int, str] | None:
+    """(the repeated piece, how many times, the command with the run collapsed), or None."""
+    m = RUNAWAY.search(command)
+    if not m:
+        return None
+    piece = m.group(1)
+    n = len(m.group(0)) // len(piece)
+    return piece, n, command[:m.start()] + piece * 3 + f"…[{piece!r} {n} times, shortened by the harness]…" + command[m.end():]
+
+
 SYSTEM = "You are a helpful assistant that can interact with a computer."
 
 INSTANCE = """Please solve this issue: {task}
@@ -345,7 +368,7 @@ class TranscriptAgent:
                 m.before_call(ctx)
             try:
                 for _ in range(5):  # an empty reply (e.g. a proxy's moderation block) is asked again
-                    reply = self.client.chat(ctx.messages, purpose="agent", thinking=THINK, max_tokens=16384,
+                    reply = self.client.chat(ctx.messages, purpose="agent", thinking=THINK, max_tokens=AGENT_MAX_TOKENS,
                                              tools=[BASH_TOOL, EDIT_TOOL] if edit_tool_offered(ctx.ws) else [BASH_TOOL])
                     if reply.tool_calls or reply.text.strip():
                         break
@@ -372,11 +395,26 @@ class TranscriptAgent:
             ctx.messages.append(self._assistant(reply))
             calls = [c for c in reply.tool_calls if c.get("function", {}).get("name") in ("bash", "edit_file")]
             if not calls:
-                ctx.messages.append({"role": "user", "content": format_error(ctx.ws)})
-                ctx.log("format_error", finish=reply.finish_reason)
+                cut = reply.finish_reason == "length"
+                ctx.messages.append({"role": "user", "content": CUT_REPLY.format(limit=AGENT_MAX_TOKENS) if cut
+                                     else format_error(ctx.ws)})
+                ctx.log("reply_cut" if cut else "format_error", finish=reply.finish_reason)
                 continue
             for call in calls:
                 command = _command(call)
+                if (run := runaway(command)) is not None:
+                    piece, n, short = run
+                    args = json.loads(call["function"].get("arguments") or "{}")
+                    for k, v in args.items():  # keep the transcript (every later prompt) small
+                        if isinstance(v, str) and (r := runaway(v)) is not None:
+                            args[k] = r[2]
+                    call["function"]["arguments"] = json.dumps(args)
+                    ctx.log("runaway", piece=piece, n=n, chars=len(command))
+                    ctx.messages.append(self._tool(call, RUNAWAY_NOTE.format(piece=piece, n=n)))
+                    with (self.run_dir / "steps.jsonl").open("a") as f:
+                        f.write(json.dumps({"step": ctx.step, "t": round(time.time() - start), "command": short,
+                                            "output": "", "notes": [RUNAWAY_NOTE.format(piece=piece, n=n)[:200]]}) + "\n")
+                    continue
                 if is_submit(command):
                     refusal = next((x for m in self.middleware if (x := m.on_submit(ctx))), None)
                     if refusal is None:

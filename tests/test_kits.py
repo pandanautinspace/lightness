@@ -1198,6 +1198,8 @@ def test_try_app_header_shows_kw_values_with_their_type_and_exact_text_expects_w
     out = try_app(tmp_path, names, "--kw", "board=.....,.....", "expect:#path: '$.a'", "expect:$.a")
     assert "board='.....,.....' (str)" in out
     assert "FAILED expect:#path: '$.a'" in out and "ok: expect:$.a" in out
+    out = try_app(tmp_path, names, "expect:#path 'Path: $.a'")
+    assert "not on the screen as written (the screen has #path: 'Path: $.a' with a colon after the id)" in out
 
 
 def test_try_app_says_an_input_dropped_typed_keys(tmp_path):

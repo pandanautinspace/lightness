@@ -395,6 +395,9 @@ def expectation(action: str, value: str, state: dict[str, list[str]], data_files
         if want.lower() in screen.lower():
             i = screen.lower().index(want.lower())
             return f"not on the screen (only with different case: {screen[i:i + len(want)]!r})"
+        if (m := re.fullmatch(r"(#[\w-]+)\s+(\S.*)", want)) and f"{m[1]}: {m[2]}" in screen:
+            # the 35B wrote expect:"#path '$'" for 3 steps while the screen said #path: '$' (json-viewer)
+            return f"not on the screen as written (the screen has {m[1]}: {m[2]} with a colon after the id)"
         if CLASS_LIKE.match(want):
             return ("not on the screen (if you meant a CSS class or selector: expect matches the text the screen "
                     "shows, as the dump below prints it, not selectors)")

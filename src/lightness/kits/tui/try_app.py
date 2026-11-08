@@ -499,7 +499,17 @@ async def run(cls, kw, data_files: dict[str, Path], clock: FakeClock | None, ste
                         continue
                     say(f"after {step}:")
                     if action == "type":
+                        target = app.focused
+                        before = getattr(target, "value", None) if type(target).__name__ == "Input" else None
                         await pilot.press(*value)
+                        after = getattr(target, "value", None)
+                        if before is not None and isinstance(after, str) and value not in after and (
+                                target.type != "text" or target.restrict):
+                            # Input(type="number"/"integer") or restrict= drops keys silently: the 35B typed "abc"
+                            # into a number field to test validation and got "(nothing changed)" (loan-calc)
+                            kind = f"type={target.type!r}" if target.type != "text" else f"restrict={target.restrict!r}"
+                            say(f"  ({name(target)} is an Input with {kind}: it dropped the keys that don't fit, so it "
+                                f"holds {after!r}, not {before + value!r}; input it can't hold can't be typed into it)")
                     elif action == "press":
                         focused = app.focused
                         typed_before = getattr(focused, "value", None) if type(focused).__name__ == "Input" else None

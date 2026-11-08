@@ -1175,3 +1175,13 @@ def test_try_app_header_shows_kw_values_with_their_type_and_exact_text_expects_w
     out = try_app(tmp_path, names, "--kw", "board=.....,.....", "expect:#path: '$.a'", "expect:$.a")
     assert "board='.....,.....' (str)" in out
     assert "FAILED expect:#path: '$.a'" in out and "ok: expect:$.a" in out
+
+
+def test_try_app_says_an_input_dropped_typed_keys(tmp_path):
+    (tmp_path / "n.py").write_text(
+        "from textual.app import App\nfrom textual.widgets import Input\n\n\nclass N(App):\n"
+        "    def compose(self):\n        yield Input(id='years', type='integer')\n        yield Input(id='name')\n")
+    out = try_app(tmp_path, {"module": "n", "app_class": "N", "params": []}, "focus:#years", "type:3.5",
+                  "focus:#name", "type:3.5")
+    assert "(#years is an Input with type='integer': it dropped the keys that don't fit, so it holds '35'" in out
+    assert out.count("dropped the keys") == 1  # a plain text Input takes anything

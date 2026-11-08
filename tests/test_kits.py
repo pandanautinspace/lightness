@@ -602,6 +602,29 @@ def test_start_check_has_no_warnings_for_the_shell_and_parts(tmp_path):
         assert clashes(tmp_path, {"module": "app"}) == [], p.name
 
 
+def test_start_check_warns_when_an_awaited_push_screen_value_is_used(tmp_path):
+    from lightness.kits.smoke import screen_results
+
+    (tmp_path / "app.py").write_text(
+        "class A:\n"
+        "    async def action_add(self):\n"
+        "        result = await self.push_screen(Ask())\n"
+        "        if await self.app.push_screen(Ask()):\n"
+        "            pass\n"
+        "    async def fine(self):\n"
+        "        await self.push_screen(Ask())\n"
+        "        self.push_screen(Ask(), self.done)\n"
+        "        x = await self.push_screen(Ask(), wait_for_dismiss=True)\n")
+    warn = screen_results(tmp_path, {"module": "app"})
+    assert len(warn) == 1 and "(line 3, 4)" in warn[0] and "self.push_screen(screen, callback)" in warn[0]
+    for name in SHELL_NAMES:
+        (tmp_path / "app.py").write_text(render_shell(load_kit("tui"), SHELL_NAMES[name]))
+        assert screen_results(tmp_path, {"module": "app"}) == [], name
+    for p in load_kit("tui").parts:
+        (tmp_path / "app.py").write_text(p.path.read_text())
+        assert screen_results(tmp_path, {"module": "app"}) == [], p.name
+
+
 def test_headless_test_part_passes_its_own_tests():
     proc = subprocess.run([sys.executable, "-m", "pytest", str(TUI / "parts" / "headless_test.py"), "-q",
                            "-p", "no:cacheprovider"], capture_output=True, text=True, timeout=120, check=False)

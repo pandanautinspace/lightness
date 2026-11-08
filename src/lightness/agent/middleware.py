@@ -433,8 +433,9 @@ class Kit(Middleware):
             results = smoke.tui(ctx.ws, names, ctx.run_dir)
             ctx.data["kit.smoke_ok"] = all(r.ok for r in results)
             if results:
-                warnings = smoke.undefined_names(ctx.ws, names) + smoke.clashes(ctx.ws, names)
-                text = "\n".join([smoke.summarize(results, f"{names['module']}.py"), *warnings])
+                warnings = (smoke.undefined_names(ctx.ws, names) + smoke.clashes(ctx.ws, names)
+                            + smoke.screen_results(ctx.ws, names))
+                text = "\n".join(x for x in [smoke.summarize(results, f"{names['module']}.py"), *warnings] if x)
                 previous, ctx.data["kit.smoke"] = ctx.data.get("kit.smoke"), text
                 ctx.log("smoke", ok=all(r.ok for r in results), warnings=len(warnings))
                 if text != previous and not (previous is None and all(r.ok for r in results) and not warnings):

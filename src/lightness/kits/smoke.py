@@ -253,6 +253,29 @@ def undefined_names(ws: Path, names: dict) -> list[str]:
     return [f"warning: {path.name} uses names it never imports or defines: {listed}. Import them all now."]
 
 
+def screen_results(ws: Path, names: dict) -> list[str]:
+    """Warnings for `x = await self.push_screen(screen)`: awaiting push_screen only waits until the
+    screen is shown and gives None, so the dialog's result is silently lost (the 35B spent steps on
+    bookmarks' enter handler while every add saved nothing). Never blocks."""
+    path = ws / f"{names['module']}.py"
+    try:
+        tree = ast.parse(path.read_text())
+    except (OSError, SyntaxError, ValueError):
+        return []
+    statements = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Expr)}
+    lines = []
+    for node in ast.walk(tree):
+        call = node.value if isinstance(node, ast.Await) else None
+        if (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute) and call.func.attr == "push_screen"
+                and id(node) not in statements and not any(k.arg == "wait_for_dismiss" for k in call.keywords)):
+            lines.append(str(node.lineno))
+    if not lines:
+        return []
+    return [f"warning: {path.name} uses the value of `await ...push_screen(screen)` (line {', '.join(lines)}): "
+            "that is always None, not what the screen dismisses with (awaiting only waits until it is shown). "
+            "Pass a callback instead: self.push_screen(screen, callback); the callback gets the result."]
+
+
 def clashes(ws: Path, names: dict) -> list[str]:
     """Warnings for names the app's Textual subclasses set or define that Textual's base already
     uses (e.g. self._running on an App): those silently break the app. Never blocks."""

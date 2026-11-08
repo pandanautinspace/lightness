@@ -9,7 +9,8 @@ laps in a list as I go.
   zero-argument callable returning seconds as a float; the app must read the time only through
   it (tests pass a fake clock).
 - A widget with id `elapsed` shows the elapsed time. Under an hour it is formatted `MM:SS.d`
-  (two-digit minutes, two-digit seconds, tenths), e.g. `01:05.3`. While running it refreshes on
+  (two-digit minutes, two-digit seconds, tenths), e.g. `01:05.3`. Tenths are cut, not rounded,
+  like any stopwatch: 3.06 seconds shows `00:03.0`. While running it refreshes on
   its own at least 5 times per second; paused time does not count.
 - Keys: `space` starts / pauses / resumes. `l` records a lap while running (ignored otherwise).
   `r` resets the time to `00:00.0` and clears the laps, but only while paused or stopped

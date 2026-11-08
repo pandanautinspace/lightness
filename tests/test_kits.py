@@ -706,7 +706,9 @@ def test_try_app_builtin_checks(tmp_path):
     out = try_app(tmp_path, COUNTER, "--builtin")
     assert out.splitlines() == ["PASS harness: every key works, starting with no data file",
                                 "PASS harness: every key works, starting with the sample path file",
-                                "PASS harness: time moves (an hour on the fake clock)", "3 of 3 checks pass"]
+                                "PASS harness: time moves (an hour on the fake clock)",
+                                "PASS harness: a key's effect shows at once, without waiting for a timer tick",
+                                "4 of 4 checks pass"]
     (tmp_path / "counter.py").write_text(counter(boom=True, with_input=True))  # starts in the Input: keys type text
     out = try_app(tmp_path, COUNTER, "--builtin")
     assert ("FAIL harness: every key works, starting with no data file\n"
@@ -1306,3 +1308,24 @@ def test_try_app_says_left_right_do_nothing_in_a_tree(tmp_path):
     out = try_app(tmp_path, names, "focus:#tree", "press:right", "press:down")
     assert "(left/right did nothing: #tree is a Tree; up/down move one row" in out
     assert out.count("did nothing") == 1  # down moved the cursor: no note
+
+
+def test_try_app_builtin_check_keys_show_their_effect_without_a_tick(tmp_path):
+    app = ("import time\nfrom textual.app import App\nfrom textual.widgets import Static\n\n\nclass W(App):\n"
+           "    BINDINGS = [('space', 'toggle')]\n\n"
+           "    def __init__(self, clock=time.monotonic):\n        super().__init__()\n        self.clock = clock\n"
+           "        self.start, self.banked = None, 0.0\n\n"
+           "    def compose(self):\n        yield Static('0.0', id='t')\n\n"
+           "    def on_mount(self):\n        self.timer = self.set_interval(0.1, self.tick, pause=True)\n\n"
+           "    def tick(self):\n        run = self.clock() - self.start if self.start is not None else 0.0\n"
+           "        self.query_one('#t', Static).update(f'{self.banked + run:.1f}')\n\n"
+           "    def action_toggle(self):\n        if self.start is None:\n            self.start = self.clock()\n"
+           "            self.timer.resume()\n        else:\n            self.banked += self.clock() - self.start\n"
+           "            self.start = None\n            self.timer.pause()\nTICK")
+    names = {"module": "w", "app_class": "W", "params": [{"name": "clock", "role": "clock", "file": ""}]}
+    (tmp_path / "w.py").write_text(app.replace("TICK", ""))
+    out = try_app(tmp_path, names, "--builtin")
+    assert "FAIL harness: a key's effect shows at once, without waiting for a timer tick" in out
+    assert "pressing space, letting 3 s pass, then pressing space shows" in out
+    (tmp_path / "w.py").write_text(app.replace("TICK", "        self.tick()\n"))
+    assert "PASS harness: a key's effect shows at once" in try_app(tmp_path, names, "--builtin")

@@ -1112,6 +1112,44 @@ def builtin_checks(config: dict, cls) -> list[tuple[str, str | None]]:
                 shutil.rmtree(tmp, ignore_errors=True)
 
         out.append(("harness: time moves (an hour on the fake clock)", asyncio.run(time_moves())))
+
+        # stopwatch (passes 3, 4, 5): pause right after time passed still showed 00:00.0 until the next timer
+        # tick; try's advance: lets the timer tick, so no check of the model's could see it, and notes didn't help
+        async def after_pair(k1: str, k2: str, tick: bool) -> list[str]:
+            tmp = Path(tempfile.mkdtemp(prefix="check-", dir=".lightness"))
+            try:
+                kw, _, clock, _ = prepare(config, parser().parse_args(["--empty"]), tmp)
+                app = cls(**kw)
+                async with app.run_test(size=(100, 30)) as pilot:
+                    await pilot.pause()
+                    await pilot.press(k1)
+                    await pilot.pause()
+                    clock.t += 3.0625
+                    if tick:
+                        await pilot.pause(0.3)
+                    await pilot.press(k2)
+                    await pilot.pause()
+                    return [line for lines in snapshot(app).values() for line in lines]
+            finally:
+                shutil.rmtree(tmp, ignore_errors=True)
+
+        async def keys_show_at_once() -> str | None:
+            pairs = list(dict.fromkeys([(k, k) for k in keys[:6]] + [(keys[0], k) for k in keys[1:6]]))
+            for k1, k2 in pairs:
+                try:
+                    ticked, not_ticked = await after_pair(k1, k2, True), await after_pair(k1, k2, False)
+                except Exception:  # noqa: BLE001 - crashes are reported by the key check
+                    continue
+                if ticked != not_ticked:
+                    a, b = next(((x, y) for x, y in zip(ticked, not_ticked) if x != y), (ticked[-1:], not_ticked[-1:]))
+                    return (f"pressing {k1}, letting 3 s pass, then pressing {k2} shows {cut(str(a).strip())!r} when a "
+                            f"timer tick came in between, but {cut(str(b).strip())!r} when it didn't: a key must update "
+                            "the screen in its own handler (call your tick/refresh method there), not wait for the next tick")
+            return None
+
+        if keys:
+            out.append(("harness: a key's effect shows at once, without waiting for a timer tick",
+                        asyncio.run(keys_show_at_once())))
     if seeds := [p["name"] for p in params if p["role"] == "seed"]:
         # lights-out (passes 2 and 4): the 35B made self.rng = random.Random(seed), then drew from
         # random.choice, so the same seed gave a different puzzle; no check of its own could see that

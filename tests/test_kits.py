@@ -947,6 +947,8 @@ def test_lint_rejects_file_names_where_parameter_names_go():
 
     from lightness.kits.tui.try_app import lint
 
+    assert "db_path is a file parameter, and every check already gets a fresh file" in " ".join(
+        lint(shlex.split("--kw db_path=/tmp/x.db expect:a"), ["db_path"]))
     problems = " ".join(lint(shlex.split("--file-text trip.json='{}' expect-file:trip.json='{}'"), ["data_path"]))
     assert "'trip.json' is not a file parameter of the App (they are: data_path)" in problems
     assert "expect-file takes a file parameter's name" in problems

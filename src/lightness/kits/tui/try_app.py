@@ -713,6 +713,11 @@ def lint(tokens: list[str], files: list[str] | None = None) -> list[str]:
                     # the line's own quoting ate the quotes inside (--kw board=["#.", ...] → [#., ...])
                     problems.append(f"--kw {value[:50]}: not a Python literal once the line is split (quotes inside "
                                     f"were removed); wrap the whole option in single quotes: --kw '{param}=[\"a\", \"b\"]'")
+            if files is not None and opt == "--kw" and param in files:
+                # the 35B pointed a database at /tmp (not writable) with --kw and spent 3 steps on it
+                problems.append(f"--kw {param}=...: {param} is a file parameter, and every check already gets a "
+                                f"fresh file for it; leave it out (start empty), or give contents with "
+                                f"--file-text {param}=TEXT")
             if files is not None and opt in ("--file", "--file-text") and param not in files:
                 problems.append(f"{opt} {param}=...: {param!r} is not a file parameter of the App "
                                 f"(they are: {', '.join(files) or 'none'})")

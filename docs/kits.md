@@ -669,3 +669,56 @@ harness gap (below), not for an edit.
   at the thinking budget + 8k tokens (`19b4505`).
 
 **Next:** third consistency pass over all 9 tasks with `LIGHTNESS_EDIT=1 LIGHTNESS_THINK=4096`.
+
+### Third consistency pass, 2026-11-07 (interim)
+
+Method: all 9 tasks with `LIGHTNESS_EDIT=1 LIGHTNESS_THINK=4096`, run as one batch and watched live;
+on a stall (3+ steps without progress) the batch is stopped, the cause fixed, and the batch
+restarted with the remaining tasks and the stopped one moved to the end (so the next run is a
+different task). The goal was every task finishing on its first attempt; it didn't get there.
+
+| task | first attempt | code | spec | out tokens | wall s | steps | edits |
+|---|---|---|---|---|---|---|---|
+| airport-lookup | finished | `c0a6baa` | 11/11 | 6.5k | 171 | 9 | 0 |
+| csv-browser | finished | `3f6bcb6` | 9/11 | 8.2k | 187 | 14 | 5 |
+| trip-split | finished | `f67a3cb` | 11/11 | 11.6k | 342 | 16 | 9 |
+| bookmarks | stopped (step 12, 13 on retry) | | | | | | |
+| json-viewer | stopped (step 10); retry finished | `ab95cba` | **4/10** | 7.2k | 167 | 13 | 2 |
+| lights-out | stopped (step 13, 9 on retry) | | | | | | |
+| loan-calc | stopped (step 18, after all checks passed) | | | | | | |
+| notepad | stopped (step 8) | | | | | | |
+| stopwatch | stopped (step 9) | | | | | | |
+
+3 of 9 finished first time (pass 2: 5 of 9), all at ~55 tok/s on AC, all well under pass 2's
+times. Every stop had a new, generic cause:
+
+- `--kw db_path=/tmp/...` for a file parameter: linted (`3f6bcb6`).
+- An `edit_file` call that sent the whole file as old_text with empty new_text (meant as a submit):
+  refused (`1b2b3ec`).
+- Probing a tree one try at a time past two nudges (json-viewer, third run with this pattern): the
+  5th try command in a row with nothing changed is now refused until something changes; a checks
+  report against the untouched shell says the app isn't written yet (`50d5687`). Middleware can
+  now refuse a command.
+- `023bd3b` had cut the "#cell-2-2 can't be clicked: ... cut off" line that explains a FAILED
+  click: lines naming a step's own problem are kept (`e867bf7`).
+- "Let me submit the final output" followed by `cat app.py` (twice): notes that say "submit now"
+  name the submit command (`66fa052`).
+- `Static.update("[modified]")` renders empty (markup): the dump names text lost to a non-style
+  [tag], and the cheat sheet says how to show brackets (`72df98c`).
+- The same start crash after a change was silent (the start check only reported changes), with
+  the cause (`self._start_time`, Textual's own) named once in a warning: it now says "still
+  crashes the same way", warnings first (`f67a3cb`).
+- `focus:#search press:a` typed "a" into the search box: the dump says the key went into the Input
+  as text and bindings don't fire there (`ab95cba`).
+- A list-of-rows board passed as one comma string: the try header shows each `--kw` value with its
+  type (`25fcda7`).
+
+**Checks that pass while the contract fails.** json-viewer's retry passed all 13 of its checks
+and only 4/10 spec tests: its #path showed `Path: $.regions`, and `expect:"$.regions"` matches any
+part of the screen. csv-browser lost 2 spec tests the same way. checks.md now says how to check a
+widget's exact text with the dump's own format, `expect:"#path: '$.a'"` (`2be8685`). This is the
+"checks miss something the contract asks for" issue from pass 2; it is now the main gap in spec
+score, not stalls.
+
+**Edits in pass 3:** 16 `edit_file` calls in the 4 finished runs; one destructive call (above),
+caught by the model the next step; no other failed or damaging edits.

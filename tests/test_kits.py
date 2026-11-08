@@ -1133,3 +1133,11 @@ def test_edit_json_replaces_one_exact_occurrence(tmp_path):
     assert rc == 1 and "would not compile" in out and text == "def f():\n    return 1\n"
     rc, out, text = run_edit_json(tmp_path, "new.txt", None, "", "hello\n")
     assert rc == 0 and text == "hello\n" and "Created new.txt" in out
+
+
+def test_edit_json_refuses_deleting_most_of_a_file(tmp_path):
+    src = "".join(f"line{i} = {i}\n" for i in range(20))
+    rc, out, text = run_edit_json(tmp_path, "a.py", src, src, "")
+    assert rc == 1 and text == src and "would delete 20 of the 20 lines" in out
+    rc, out, text = run_edit_json(tmp_path, "b.py", src, "line3 = 3\n", "")
+    assert rc == 0 and "line3" not in text  # deleting a few lines is fine

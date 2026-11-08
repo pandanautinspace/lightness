@@ -103,6 +103,12 @@ def replace_text(spec: dict) -> int:
         print(f"Nothing changed: old_text occurs {count} times in {path} (lines {', '.join(map(str, starts[:6]))}); "
               "include a line before or after to pick one.")
         return 1
+    lines, gone = len(text.splitlines()), len(old.splitlines()) - len(new.splitlines())
+    if lines > 10 and not new.strip() and gone > lines // 2:
+        # the 35B, meaning to submit, once sent the whole of browse.py as old_text with empty new_text
+        print(f"Nothing changed: that would delete {gone} of the {lines} lines of {path}. To delete code, give just "
+              f"those lines as old_text; to replace the whole file, write it with cat > {path}.")
+        return 1
     result = text.replace(old, new, 1)
     if path.suffix == ".py" and compiles(text, path) is True and (why := compiles(result, path)) is not True:
         print(why)  # a file that compiled must still compile

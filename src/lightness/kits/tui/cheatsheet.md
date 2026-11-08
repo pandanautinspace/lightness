@@ -22,6 +22,8 @@
   There is no `Static.Click`.
 - `TextArea`: text it loads starts with the cursor at the start, (0, 0). To type after it, move first:
   `end` (or `ctrl+e`) goes to the end of the line, `down` to the next line; there is no `ctrl+end`.
+  In code: `ta.move_cursor(ta.document.end)` (or a `(row, col)` tuple); `ta.cursor_location` reads it
+  (`cursor_at_end_of_text` is a bool property, not a method).
 - Tabs: build them in `compose()` with `with TabbedContent(id="tabs"):` and, inside,
   `with TabPane("People", id="people"):` then `yield` that tab's widgets. Don't pass TabPane
   objects to `TabbedContent(...)` (its arguments are titles) and don't mount into a TabPane from

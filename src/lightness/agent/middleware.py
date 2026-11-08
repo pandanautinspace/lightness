@@ -468,8 +468,13 @@ class Kit(Middleware):
 
         checks_file = ctx.ws / smoke.CHECKS_FILE
         state = (sig, checks_file.read_text() if checks_file.exists() else None)
-        if "try_app" not in command or "--checks" in command or state != ctx.data.get("kit.try_state"):
-            ctx.data["kit.try_state"], ctx.data["kit.tries"] = state, (1 if "try_app" in command else 0)
+        is_try = "try_app" in command and "--checks" not in command
+        if state != ctx.data.get("kit.try_state"):
+            ctx.data["kit.try_state"], ctx.data["kit.tries"] = state, (1 if is_try else 0)
+            return None
+        if not is_try:
+            # a look that changed nothing (cat, grep) keeps the streak: the 35B went try, try, cat, edit, try, try
+            # on json-viewer and the nudge never came (each cat reset it)
             return None
         ctx.data["kit.tries"] += 1
         n = ctx.data["kit.tries"]

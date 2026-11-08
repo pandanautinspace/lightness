@@ -37,7 +37,8 @@
   `lv.index`, `lv.highlighted_child`; events `ListView.Selected` (enter) and `ListView.Highlighted`.
   After clear + extend, `index` is `None`: set it again.
 - `DataTable`: `add_column(label, key=...)` once; `add_row(*cells, key=...)`; `clear()` keeps the
-  columns; `cursor_type="row"`; `coordinate_to_cell_key(table.cursor_coordinate).row_key.value`.
+  columns; `cursor_type="cell"` (default: `table.cursor_column` follows left/right) or `"row"` (whole
+  records, left/right do nothing); `coordinate_to_cell_key(table.cursor_coordinate).row_key.value`.
   Columns: `table.columns` is a dict `{ColumnKey: Column}` (`key.value` is the str key,
   `col.label.plain` the label); `table.ordered_columns` lists them in order. The cursor's column
   key: `table.coordinate_to_cell_key(table.cursor_coordinate).column_key.value`.

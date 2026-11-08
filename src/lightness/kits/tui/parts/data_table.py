@@ -4,8 +4,11 @@
   add them again; clear(columns=True) also removes the columns.
 - Give rows a key (add_row(..., key=str(id))) and map the cursor back to your data with
   coordinate_to_cell_key(cursor_coordinate).row_key.value, not by row position after sorting.
-- cursor_type="row" for record browsing. DataTable binds enter (-> RowSelected), arrows and
-  page keys itself; App bindings on other printable keys still fire while it has focus.
+- The cursor kind: cursor_type="row" highlights whole records and left/right do nothing (picking a
+  record, e.g. enter to open it); "cell" (the default) moves over cells, so table.cursor_column says
+  which column the user is on (sort by the cursor's column, act on one field). Use what the task asks.
+  DataTable binds enter (-> RowSelected / CellSelected), arrows and page keys itself; App bindings on
+  other printable keys still fire while it has focus.
 - Sort your data and redraw (simplest), or use table.sort(column_key, reverse=...).
 """
 

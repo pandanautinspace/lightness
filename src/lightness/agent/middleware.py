@@ -8,7 +8,7 @@ import json
 import re
 from pathlib import Path
 
-from lightness.agent.loop import Ctx, Middleware
+from lightness.agent.loop import SUBMIT, Ctx, Middleware
 from lightness.loop import prompts
 from lightness.provider import DecisionError
 from lightness.spec.workshop import render, run_workshop
@@ -222,7 +222,7 @@ TRIES_REFUSED = ("Not run: {n} try commands in a row with no change to the app o
 TRIES_AGAIN = ("[automatic checks] {n} try commands in a row with nothing changed. Stop exploring: write what you "
                "have seen into checks.txt, or change the app.")
 CHECKS_IDLE = ("[automatic checks] All {n} checks pass and the last {steps} steps changed nothing. If something "
-               "the task asks for isn't covered, add it as a check in checks.txt; otherwise submit now.")
+               "the task asks for isn't covered, add it as a check in checks.txt; otherwise submit now: run `" + SUBMIT + "`.")
 REWRITE_NOTE = ("[automatic checks] That wrote all {n} lines of {file} again to change {k} of them. Change just "
                 "those lines with the edit_file tool next time (see Changing a file): seconds instead of minutes.")
 SAME_TEXT = ("[automatic checks] {files} was written again with exactly the same text as before: nothing "
@@ -230,12 +230,15 @@ SAME_TEXT = ("[automatic checks] {files} was written again with exactly the same
 CHECKS_ON_SHELL = ("{app} is still the starting shell, so checks of what the app does fail for now; that "
                    "doesn't make them wrong. Write the app next.")
 CHECKS_BY_HAND = ("[automatic checks] That ran checks.txt by hand: the harness already ran it after the last change "
-                  "and all {n} pass, so this tells you nothing new. Submit now, or add a check for anything the task "
-                  "asks that checks.txt doesn't cover yet.")
+                  "and all {n} pass, so this tells you nothing new. Submit now (run `" + SUBMIT + "`), or add a "
+                  "check for anything the task asks that checks.txt doesn't cover yet.")
 CHECKS_FAIL_HINT = ("Each check started a fresh app: it sees nothing another check did. For each failure, decide "
                     "first whether the check or the app disagrees with the task (the screen it shows is what the "
                     "app does); fix that one, not both.")
-CHECKS_ALL_PASS = "If checks.txt covers every item of the task's contract, submit now; otherwise add the missing checks."
+# "submit now" without the command: twice the 35B said "let me submit the final output" and then ran
+# cat app.py or a try command (loan-calc, csv-browser): name the command where it's needed
+CHECKS_ALL_PASS = ("If checks.txt covers every item of the task's contract, submit now: run `" + SUBMIT + "` as a "
+                   "command of its own; otherwise add the missing checks.")
 CHECKS_NOT_RUN = ("{k} of them did not run: their own lines in checks.txt have a mistake (shown below). No change "
                   "to the app can fix those; fix the lines in checks.txt first.")
 STEP_PROBLEM = re.compile(r"can't be clicked|no widget matches|needs a clock parameter|unknown step|the app exited")

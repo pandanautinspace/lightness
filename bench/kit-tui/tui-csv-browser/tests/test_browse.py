@@ -84,12 +84,12 @@ async def sort_by(pilot, col, times=1):
     table = pilot.app.query_one("#table")
     table.focus()
     await pilot.pause()
-    while table.cursor_column > col:
-        await pilot.press("left")
-    while table.cursor_column < col:
-        await pilot.press("right")
+    for _ in range(20):  # bounded: a cursor that left/right don't move fails here, not by timeout
+        if table.cursor_column == col:
+            break
+        await pilot.press("left" if table.cursor_column > col else "right")
     await pilot.pause()
-    assert table.cursor_column == col
+    assert table.cursor_column == col, f"left/right did not move the table cursor to column {col}"
     for _ in range(times):
         await pilot.press("s")
         await pilot.pause()

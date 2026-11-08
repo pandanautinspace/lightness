@@ -2,6 +2,8 @@
 
 - Tree(label): build nodes with node.add(label, data=...) (branch) and node.add_leaf(label,
   data=...); keep the real object in `data` and read it back from event.node.data.
+  Put everything you'll need about a node in `data` when you add it (e.g. its path and its value):
+  rebuilding it later from labels or by walking node.parent up to the root breaks easily.
 - Tree.NodeHighlighted fires on cursor moves, Tree.NodeSelected on enter/click. Expand with
   node.expand() (or tree.root.expand_all()).
 - For folders, DirectoryTree(path) does this for you and posts DirectoryTree.FileSelected.

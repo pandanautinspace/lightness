@@ -948,3 +948,47 @@ never tried a fraction); notepad's false pass above.
 
 **Next:** a seventh pass from `c8b2acd`. If every task finishes first time, the full 9 × 3 bench
 (asking the user first).
+
+### Seventh consistency pass, 2026-11-08
+
+**Method.** As before, from `c8b2acd`; fixes between batches.
+
+| task | first try | code | spec | intent | steps | wall s | out tokens |
+|---|---|---|---|---|---|---|---|
+| json-viewer | finished | `0f0bec2` | 10/10 | 1/3 | 23 | 377 | 16.3k |
+| csv-browser | finished | `0f0bec2` | 11/11 | 0/3 | 13 | 268 | 10.8k |
+| bookmarks | finished | `0f0bec2` | 11/11 | 0/3 | 16 | 779 | 16.6k |
+| stopwatch | finished | `0f0bec2` | 8/8 | 0/3 | 9 | 259 | 8.5k |
+| airport-lookup | finished | `0f0bec2` | 11/11 | 0/3 | 11 | 212 | 7.4k |
+| lights-out | finished | `0f0bec2` | 9/9 | 2/3 | 20 | 679 | 27.1k |
+| trip-split | finished | `0f0bec2` | 9/11 | 0/3 | 17 | 375 | 13.0k |
+| loan-calc | stopped (step 14); retry finished | `0f0bec2` | 11/11 | 1/3 | 9 | 267 | 10.2k |
+| notepad | stopped (step 12); retry finished | `0f0bec2` | 11/11 | 0/2 | 8 | 141 | 5.0k |
+
+7 of 9 first try, all 9 within the pass; spec 91/93, the best yet (every task at full spec but
+trip-split). Intent 4/26. Some runs got long (lights-out 679 s, bookmarks 779 s): many whole-file
+rewrites of checks.txt and long thinking per step.
+
+**Stops.** Both were API look-ups, not loops: loan-calc's own validator called `self.error()` and then
+probed the Validator API for 3 steps (the crash hint already named `failure`/`success`); notepad probed
+TextArea for 4 steps to move the cursor in code. The cheat sheet now shows both (`74c3dcd`,
+`0f0bec2`). Each probe was 2-4 s, so these stops cost little time, but by the stall rule they count.
+
+**Fixes.**
+
+- json-viewer wrote every check as a comment (`# check: ...`) and the report said "0 of 0 checks
+  pass ... submit now"; it now says what a check line is and never says submit (`891bf0c`).
+- A check line argparse rejects (an option after the steps) showed a raw usage dump; it is a "not run"
+  line mistake now (`16dc1f1`).
+
+**Spec loss:** trip-split's balances table crashed (`Widget.remove(x)`) once an expense was added; its
+checks never looked at balances after adding one. A built-in "show each tab with the sample file" check
+was tried and dropped: that crash only happens after an add.
+
+**Where it stands.** Over passes 5-7 spec went 85 → 88 → 91 of 93, and every task now finishes within
+a pass. The first-try misses in passes 6 and 7 are all short API look-ups (CSS class checks, Validator,
+TextArea cursor) the cheat sheet didn't cover; each now does. Whether a burst of 2-4 s probes should
+count as a stall is a judgement call for the user; under the rule as written, no pass has had all 9
+first-try yet (best: 8 of 9 in passes 4 and 6).
+
+**Next:** the user decides between another pass and the full 9 × 3 bench.

@@ -439,6 +439,11 @@ class Kit(Middleware):
                 ctx.log("smoke", ok=all(r.ok for r in results), warnings=len(warnings))
                 if text != previous and not (previous is None and all(r.ok for r in results) and not warnings):
                     notes.append("[automatic start check] " + text)  # only changes (never an initial "fine")
+                elif not all(r.ok for r in results):
+                    # the same crash after a change was silent, and the 35B (stopwatch) rewrote async/sync code
+                    # for 3 steps past the warning that named the cause: say it still crashes, warnings first
+                    notes.append("[automatic start check] Still crashes on start with the same error as before"
+                                 + (": " + " ".join(warnings) if warnings else "; read it again above") + ".")
         if self.tests == "checks" and (report := self._checks(ctx)):
             notes.append(report)
         if self.tests == "checks" and (idle := self._idle_after_pass(ctx, sig)):

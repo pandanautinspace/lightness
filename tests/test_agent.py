@@ -571,3 +571,14 @@ def test_kit_checks_report_says_when_the_app_is_still_the_shell(ws):
     client = KitClient([checks, SUBMIT, SUBMIT, "echo never"], NOTES)
     TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("checks")], step_limit=4).run("notes app")
     assert "notes.py is still the starting shell" in tool_outputs(client)[0]
+
+
+def test_kit_says_when_the_app_still_crashes_the_same_way_after_a_change(ws):
+    crash = "cat > notes.py <<'EOF'\nraise SystemExit('boom')\nEOF"
+    crash2 = "cat > notes.py <<'EOF'\n# changed\nraise SystemExit('boom')\nEOF"
+    run_dir = ws.parent
+    env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
+    client = KitClient([crash, crash2, SUBMIT, SUBMIT, "echo never"], NOTES)
+    TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("none")], step_limit=4).run("notes app")
+    outs = tool_outputs(client)
+    assert "crashes" in outs[0] and "Still crashes on start with the same error" in outs[1]

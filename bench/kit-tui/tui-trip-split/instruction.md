@@ -13,7 +13,7 @@ file so I can keep adding stuff during the trip.
 - A `TabbedContent` with id `tabs` and three `TabPane`s with ids `people`, `expenses` and
   `balances`.
 - People tab: an `Input` with id `person-name` — enter adds the (trimmed) name to the trip and
-  clears the input; blank input adds nothing. A `ListView` with id `people-list` has one item per
+  clears the input; a blank (or all-spaces) name adds nothing, and enter clears the input then too. A `ListView` with id `people-list` has one item per
   person, showing the name.
 - Expenses tab: `Input`s with ids `expense-desc` and `expense-amount`, a `Select` with id
   `expense-payer` whose option values are the names of the people currently on the trip (it must

@@ -501,7 +501,15 @@ async def run(cls, kw, data_files: dict[str, Path], clock: FakeClock | None, ste
                     if action == "type":
                         await pilot.press(*value)
                     elif action == "press":
+                        focused = app.focused
+                        typed_before = getattr(focused, "value", None) if type(focused).__name__ == "Input" else None
                         await pilot.press(*keys_of(value))
+                        letters = [k for k in keys_of(value) if len(k) == 1 and k.isprintable()]
+                        if typed_before is not None and letters and getattr(focused, "value", None) != typed_before:
+                            # the 35B's checks did focus:#search press:a and then reworked the app's focus for
+                            # 3 steps: the "a" never reached the binding
+                            say(f"  ({''.join(letters)!r} went into {name(focused)} as text: an Input has focus, so "
+                                f"the app's key bindings for those keys don't fire; focus another widget first)")
                     elif action in ("click", "focus") and not app.screen.query(value):
                         ids = sorted(f"#{w.id}" for w in app.screen.query("*") if w.id and not w.id.startswith("-"))
                         say(f"  no widget matches {value!r} on this screen; ids here: {', '.join(ids) or 'none'}")

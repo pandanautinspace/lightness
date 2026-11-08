@@ -1152,3 +1152,15 @@ def test_try_app_says_when_bracketed_text_was_read_as_markup(tmp_path):
     assert "#status: (empty) (its text '[modified]' was read as markup" in out
     assert "#x: '[x] done'\n" in out  # markup=False: shown as is, no note
     assert "#b: 'bold'\n" in out  # intended markup: no note
+
+
+def test_try_app_says_a_letter_key_went_into_a_focused_input(tmp_path):
+    (tmp_path / "f.py").write_text(
+        "from textual.app import App\nfrom textual.widgets import Input, Static\n\n\nclass F(App):\n"
+        "    BINDINGS = [('a', 'add')]\n\n    def compose(self):\n        yield Input(id='search')\n"
+        "        yield Static('', id='out')\n\n    def action_add(self):\n        self.query_one('#out').update('added')\n")
+    out = try_app(tmp_path, {"module": "f", "app_class": "F", "params": []}, "focus:#search", "press:a")
+    assert "('a' went into #search as text: an Input has focus" in out
+    (tmp_path / "g.py").write_text((tmp_path / "f.py").read_text().replace("class F(App):\n", "class G(App):\n    AUTO_FOCUS = None\n"))
+    out = try_app(tmp_path, {"module": "g", "app_class": "G", "params": []}, "press:a")
+    assert "went into" not in out and "#out: 'added'" in out  # nothing focused: the binding fires

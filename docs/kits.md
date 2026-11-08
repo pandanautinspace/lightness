@@ -608,3 +608,64 @@ prints tenths with `:04.1f` (3.0625 → `00:03.1`) and the hidden tests expect t
 
 **Next:** experiment B (small in-place edits) as a switch, so B-off and B-on run on the same
 code at 4096; the B-off runs double as A's 4096 controls.
+
+### Speed experiment B: small in-place edits, 2026-11-07
+
+Method: one switch, `LIGHTNESS_EDIT=1`, so B-on and B-off run on the same code (thinking at 4096).
+Same stall rule. Three versions, each tried on 1-2 tasks before the next:
+
+- **v1** (`33f2662`): `.lightness/kit/edit.py`, a SEARCH/REPLACE helper fed by a heredoc (each block
+  must match exactly once, else nothing changes and the closest lines are shown; a .py file that
+  compiled must still compile), a "Changing a file" section in the kit context, and checks.md /
+  the thinking cut-off note pointing to it.
+- **v2** (`fad3b35`): also a note after any whole-file write of the app or checks.txt that changed
+  only a few lines ("That wrote all 126 lines of stopwatch.py again to change 12 of them...").
+- **v3** (`8eecbf6`): a native `edit_file(path, old_text, new_text)` tool next to `bash`
+  (exact-substring replace, must occur once). A call runs as `python .lightness/kit/edit.py --json`,
+  so middleware and logs see an ordinary command.
+
+| run | code | spec | out tokens | wall s (tok/s) | steps | app rewrites | edits |
+|---|---|---|---|---|---|---|---|
+| trip-split v1 | `33f2662` | 11/11 | 15.9k | 383 (54) | 10 | 3 | 0 |
+| stopwatch v2 | `fad3b35` | 6/8 | 11.4k | 257 (58) | 11 | 4 | 0 |
+| trip-split v3 | `a03beea` | 11/11 | 11.5k | 394 (55) | 16 | 2 | 7 |
+| json-viewer v3 | `a7ccb67` | 10/10 | 5.1k | 116 (57) | 9 | 1 | 3 |
+| lights-out v3 | `8c04a2c` | 9/9 | 25.6k (6.1k without the runaway) | 618 (48) | 8 | 2 | 1 |
+| json-viewer off (control) | `a7ccb67` | stopped at step 9 | | | | | |
+
+Also stopped with v3: bookmarks (step 12), stopwatch (step 9), lights-out (step 9); each for a
+harness gap (below), not for an edit.
+
+**Findings.**
+
+- **Text doesn't move the habit; a tool does.** With v1 and v2 the 35B never once used the edit
+  command: it fixed a one-line missing import by rewriting all of split.py, and v2's note fired
+  three times in a stopwatch run without one edit. With v3's native tool it edited from the first
+  fix on, in every run: 19 `edit_file` calls across 6 runs, all applied, none failed to match,
+  no broken files. Qwen coder models are trained on a str_replace-style editor tool; a heredoc
+  helper is a new habit, a tool call is an old one.
+- **checks.txt is still mostly rewritten whole;** the app is edited. trip-split v3 edited
+  checks.txt three times, the others rewrote it.
+- **Cheaper, not always faster.** trip-split: 15.9k → 11.5k output tokens at the same speed, but
+  wall time stayed ~390 s because it took 16 shorter steps instead of 10 (each step also pays for
+  the checks run and prefill). json-viewer finished first time with v3 (9 steps, 116 s) while its
+  B-off control on the same code stalled probing tree keys, but that's one pair.
+- Not clean enough to call a measured speed-up, but no sign of harm (no failed or damaging
+  edits, spec 30/30 on completed v3 runs), so the third pass runs with `LIGHTNESS_EDIT=1`.
+
+**Stalls found and fixed during B** (generic to the tui category):
+
+- `type:enter` typed the word "enter": the lint names `press:enter` (`a03beea`).
+- A stopwatch showing the banked time instead of the running one: "after advance:10: (nothing
+  changed)" read as "advance doesn't run the timers". After `advance:` the dump now says how far the
+  clock moved, that the timers ran, and how often the app read the clock (`29932fd`).
+- `--kw board=["#####", ...]` without outer quotes lost its inner quotes to the line split and was
+  passed as a string: the lint catches a list/dict that no longer parses; and a class every grid
+  cell has (an all-lit board) is now named, not dropped as structural (`a7ccb67`).
+- Probing `press:right` on a tree: the tree header names its keys (`8c04a2c`).
+- **A runaway:** one lights-out reply wrote `space,` 9466 times in a check line, 19.5k tokens in
+  385 s (the largest real command in 724 calls was ~2.5k tokens). A command with a short piece
+  repeated 200+ times is now not run and is collapsed in the transcript, and agent output is capped
+  at the thinking budget + 8k tokens (`19b4505`).
+
+**Next:** third consistency pass over all 9 tasks with `LIGHTNESS_EDIT=1 LIGHTNESS_THINK=4096`.

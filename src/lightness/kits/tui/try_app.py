@@ -658,6 +658,9 @@ def prepare(config: dict, a, tmp: Path):
             kw[key] = ast.literal_eval(value)
         except (ValueError, SyntaxError):
             kw[key] = value
+        # the value and its type as the App gets it (the 35B passed a list-of-rows board as one string,
+        # bent the app to split it, and chased an IndexError from a 4-character row)
+        said.append(f"{key}={cut(repr(kw[key]))} ({type(kw[key]).__name__})")
     return kw, data_files, clock, said
 
 

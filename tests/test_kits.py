@@ -1164,3 +1164,14 @@ def test_try_app_says_a_letter_key_went_into_a_focused_input(tmp_path):
     (tmp_path / "g.py").write_text((tmp_path / "f.py").read_text().replace("class F(App):\n", "class G(App):\n    AUTO_FOCUS = None\n"))
     out = try_app(tmp_path, {"module": "g", "app_class": "G", "params": []}, "press:a")
     assert "went into" not in out and "#out: 'added'" in out  # nothing focused: the binding fires
+
+
+def test_try_app_header_shows_kw_values_with_their_type_and_exact_text_expects_work(tmp_path):
+    (tmp_path / "k.py").write_text(
+        "from textual.app import App\nfrom textual.widgets import Static\n\n\nclass K(App):\n"
+        "    def __init__(self, board=None):\n        super().__init__()\n        self.board = board\n\n"
+        "    def compose(self):\n        yield Static('Path: $.a', id='path')\n")
+    names = {"module": "k", "app_class": "K", "params": [{"name": "board", "role": "other", "file": ""}]}
+    out = try_app(tmp_path, names, "--kw", "board=.....,.....", "expect:#path: '$.a'", "expect:$.a")
+    assert "board='.....,.....' (str)" in out
+    assert "FAILED expect:#path: '$.a'" in out and "ok: expect:$.a" in out

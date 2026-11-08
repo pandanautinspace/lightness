@@ -1003,6 +1003,33 @@ def builtin_checks(config: dict, cls) -> list[tuple[str, str | None]]:
                 shutil.rmtree(tmp, ignore_errors=True)
 
         out.append(("harness: time moves (an hour on the fake clock)", asyncio.run(time_moves())))
+    if seeds := [p["name"] for p in params if p["role"] == "seed"]:
+        # lights-out (passes 2 and 4): the 35B made self.rng = random.Random(seed), then drew from
+        # random.choice, so the same seed gave a different puzzle; no check of its own could see that
+        async def start_screen():
+            tmp = Path(tempfile.mkdtemp(prefix="check-", dir=".lightness"))
+            try:
+                kw, _, _, _ = prepare(config, parser().parse_args(["--empty"]), tmp)
+                app = cls(**kw, **{name: 7 for name in seeds})
+                async with app.run_test(size=(100, 30)) as pilot:
+                    await pilot.pause()
+                    return [line for lines in snapshot(app).values() for line in lines]
+            finally:
+                shutil.rmtree(tmp, ignore_errors=True)
+
+        async def same_seed():
+            try:
+                first, second = await start_screen(), await start_screen()
+            except Exception:  # noqa: BLE001
+                return f"starting with {seeds[0]}=7 crashes:\n" + crash_text()
+            if first == second:
+                return None
+            diff = next(((x, y) for x, y in zip(first, second) if x != y), (first[-1:], second[-1:]))
+            return (f"two starts with {seeds[0]}=7 showed different screens ({cut(str(diff[0]).strip())!r}, then "
+                    f"{cut(str(diff[1]).strip())!r}): draw every random number from one random.Random({seeds[0]}) kept on "
+                    f"self (self.rng.choice(...)), never from the random module's own functions")
+
+        out.append((f"harness: the same {seeds[0]} gives the same start", asyncio.run(same_seed())))
     return out
 
 

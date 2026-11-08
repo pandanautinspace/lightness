@@ -40,8 +40,8 @@ adds it first, in its own steps.
 Write one check per contract item: each key and what it does, the saved file's exact format,
 starting with no data file and with existing data, and wrong input. Take the expected values
 from the task. The harness already checks on its own that every key works without crashing (with
-and without a data file), that a start keeps the saved file, and that time can move: don't
-write checks for those.
+and without a data file), that a start keeps the saved file, that time can move, and that the same seed
+gives the same start: don't write checks for those.
 
 You don't need to run them yourself: the harness reports after every change. When a check
 fails, fix the app; change the check only if it disagrees with the task, and then edit that one

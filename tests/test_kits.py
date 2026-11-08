@@ -1211,3 +1211,17 @@ def test_try_app_says_an_input_dropped_typed_keys(tmp_path):
                   "focus:#name", "type:3.5")
     assert "(#years is an Input with type='integer': it dropped the keys that don't fit, so it holds '35'" in out
     assert out.count("dropped the keys") == 1  # a plain text Input takes anything
+
+
+def test_try_app_builtin_check_same_seed_same_start(tmp_path):
+    app = ("import random\nfrom textual.app import App\nfrom textual.widgets import Static\n\n\nclass R(App):\n"
+           "    def __init__(self, seed=None):\n        super().__init__()\n        self.rng = random.Random(seed)\n\n"
+           "    def compose(self):\n        yield Static(str(DRAW), id='n')\n")
+    names = {"module": "r", "app_class": "R", "params": [{"name": "seed", "role": "seed", "file": ""}]}
+    (tmp_path / "r.py").write_text(app.replace("DRAW", "self.rng.random()"))
+    out = try_app(tmp_path, names, "--builtin")
+    assert "PASS harness: the same seed gives the same start" in out
+    (tmp_path / "r.py").write_text(app.replace("DRAW", "random.random()"))
+    out = try_app(tmp_path, names, "--builtin")
+    assert "FAIL harness: the same seed gives the same start\n    two starts with seed=7 showed different screens (" in out
+    assert "never from the random module's own functions" in out

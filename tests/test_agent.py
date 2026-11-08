@@ -487,6 +487,19 @@ def test_kit_checks_arm_suspects_the_checks_after_two_ineffective_app_changes(ws
     assert mw.CHECKS_SUSPECT not in outs[1] and mw.CHECKS_SUSPECT in outs[2]
 
 
+def test_kit_checks_arm_suspects_the_checks_when_app_changes_pass_no_more_of_them(ws):
+    checks = write("checks.txt", "count: --file-text data_path='[{\"text\": \"a\"}]' expect:\"9 notes\"\n")
+    t1 = """sed -i '' 's/TITLE = "Notes"/TITLE = "Notes A"/' notes.py"""
+    t2 = """sed -i '' 's/TITLE = "Notes A"/TITLE = "Notes B"/' notes.py"""
+    run_dir = ws.parent
+    env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
+    client = KitClient([checks, t1, t2, SUBMIT, SUBMIT, "echo never"], NOTES)
+    TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("checks")], step_limit=7).run("notes app")
+    outs = tool_outputs(client)
+    assert "Notes B" in outs[2]  # the failure text changed, so the results weren't identical
+    assert mw.CHECKS_SUSPECT not in outs[1] and mw.CHECKS_SUSPECT in outs[2]
+
+
 def test_kit_edit_switch_points_a_small_change_rewrite_to_the_edit_command(ws, monkeypatch):
     lines = "".join(f"c{i}: expect-not:\"zz{i}\"\n" for i in range(24))
     first = write("checks.txt", lines)

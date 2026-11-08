@@ -39,7 +39,10 @@ adds it first, in its own steps.
 
 Write one check per contract item: each key and what it does, the saved file's exact format,
 starting with no data file and with existing data, and wrong input. When a key changes saved data, check
-both: the file (expect-file:) and the screen right after the key, without a restart (expect:). Take the expected values
+both: the file (expect-file:) and the screen right after the key, without a restart (expect:). When an
+expected number needs arithmetic, compute it with a command (python3 -c ...) and copy the result. A
+search or filter check adds two or more records and checks both sides: what matches shows (expect:) and
+what doesn't is gone (expect-not:). Take the expected values
 from the task. The harness already checks on its own that every key works without crashing (with
 and without a data file), that a start keeps the saved file, that time can move, that the same seed
 gives the same start, and that every button can be clicked: don't write checks for those.

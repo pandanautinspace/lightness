@@ -537,26 +537,31 @@ class Kit(Middleware):
         text_now = checks_file.read_text() if checks_file.exists() else None
         checks_changed = text_now != ctx.data.get("kit.checks_text")
         ctx.data["kit.checks_text"] = text_now
-        if now != prev or checks_changed:
+        failing = [n for n, v in now.items() if v is not None]
+        passing = len(now) - len(failing)
+        # app changes that pass no more checks than before, in a row: suspect the checks. Counted on the pass
+        # count, not on identical results (loan-calc: two app changes at 0 of 16 with new failure text each time)
+        if checks_changed or (prev is not None and passing > sum(v is None for v in prev.values())):
             ctx.data["kit.no_effect"] = 0
+        elif app_changed and prev is not None and failing:
+            ctx.data["kit.no_effect"] = ctx.data.get("kit.no_effect", 0) + 1
+        suspect = bool(failing) and ctx.data.get("kit.no_effect", 0) >= 2
         if now == prev and not checks_changed:  # a rewritten checks.txt always gets a report
             if not app_changed:
                 return None
             # the app changed and nothing moved: say so briefly (silence reads as "no checks ran")
-            failing = [n for n, v in now.items() if v is not None]
-            ctx.data["kit.no_effect"] = ctx.data.get("kit.no_effect", 0) + 1
-            text = (f"[automatic checks] Still {len(now) - len(failing)} of {len(now)} checks pass: this change "
+            text = (f"[automatic checks] Still {passing} of {len(now)} checks pass: this change "
                     f"fixed none and broke none." + (f" Failing: {', '.join(failing)}." if failing else ""))
             if k := len(not_run(now)):
                 text += " " + CHECKS_NOT_RUN.format(k=k)
-            if failing and ctx.data["kit.no_effect"] >= 2:
+            if suspect:
                 text += " " + CHECKS_SUSPECT
             return text
         if not checks_file.exists():
             # the app changed but there is no checks.txt: only the harness's own checks ran
             failing = [n for n, v in now.items() if v is not None]
             return "[automatic checks] " + (checks_text(now, regressions) + "\n" if failing else "") + CHECKS_MISSING
-        text = "[automatic checks] " + checks_text(now, regressions)
+        text = "[automatic checks] " + checks_text(now, regressions) + (f"\n{CHECKS_SUSPECT}" if suspect else "")
         app = ctx.ws / f"{ctx.data['kit'][1]['module']}.py"
         if any(v is not None for v in now.values()) and app.exists() and app.read_text() == ctx.data.get("kit.shell"):
             # the 35B rewrote checks.txt 3 times against the untouched shell, reading each failure as its own

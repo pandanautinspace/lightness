@@ -31,9 +31,10 @@ def main(paths: list[str]) -> None:
     for run in [r for p in paths for r in runs(Path(p))]:
         steps = [json.loads(line) for line in (run / "steps.jsonl").read_text().splitlines()]
         head = [s["command"].split("\n")[0] for s in steps]
+        edit_cmd = [h for h in head if "edit.py" in h]  # speed experiment B's edit command
         app = sum(1 for h in head if "<<" in h and "checks.txt" not in h and not h.lstrip().startswith("python"))
-        checks = sum(1 for h in head if "checks.txt" in h and ("<<" in h or ">" in h))
-        edits = sum(1 for h in head if h.lstrip().startswith(("sed ", "patch", "python3 - <<", "python - <<")))
+        checks = sum(1 for h in head if "checks.txt" in h and ("<<" in h or ">" in h) and "edit.py" not in h)
+        edits = len(edit_cmd) + sum(1 for h in head if h.lstrip().startswith(("sed ", "patch", "python3 - <<", "python - <<")))
         tries = sum(1 for h in head if "try_app" in h)
         cut = sum(1 for s in steps if any("cut off" in n for n in s.get("notes", [])))
         think = 0

@@ -6,6 +6,7 @@ contract and writes it into the workspace, so the model starts from a program th
 """
 
 import ast
+import os
 import re
 import tomllib
 from dataclasses import dataclass
@@ -255,12 +256,27 @@ def checks_example(names: dict) -> str:
     return "\n".join(lines)
 
 
+def edit_tool_on() -> bool:
+    """Speed experiment B (LIGHTNESS_EDIT=1): give the model a search/replace edit command and steer
+    changes to it instead of whole-file rewrites."""
+    return bool(os.environ.get("LIGHTNESS_EDIT"))
+
+
+def editing(kit: Kit) -> str:
+    """The edit command's section, when the experiment is on and the kit has one."""
+    path = kit.dir / "edit.md"
+    return path.read_text() + "\n\n" if edit_tool_on() and path.exists() else ""
+
+
 def checking(kit: Kit, names: dict, tests: str) -> str:
     """The checks section, for the checks testing arm."""
     path = kit.dir / "checks.md"
     if tests != "checks" or not path.exists():
         return ""
-    return path.read_text().replace("{example}", checks_example(names)) + "\n\n"
+    text = path.read_text().replace("{example}", checks_example(names))
+    if editing(kit):
+        text = text.replace("(e.g. with sed)", "(with the edit command)")
+    return text + "\n\n"
 
 
 def context(kit: Kit, names: dict, parts_dir: str, chosen: list[str], tests: str = "none") -> str:
@@ -269,6 +285,6 @@ def context(kit: Kit, names: dict, parts_dir: str, chosen: list[str], tests: str
     inline = "".join(part_text(p) for p in kit.parts if p.name in chosen)
     return (f"## Starting point\n\nI created `{shell_path(kit, names)}`, a minimal {kit.category} app that already "
             f"runs. Build the task on it: keep its structure, replace the placeholder content.\n\n"
-            f"{notes(kit, tests)}\n\n{checking(kit, names, tests)}{trying(kit, names, tests)}{kit.cheatsheet}\n\n"
+            f"{notes(kit, tests)}\n\n{editing(kit)}{checking(kit, names, tests)}{trying(kit, names, tests)}{kit.cheatsheet}\n\n"
             f"## Parts\n\nSmall, working examples of common patterns, in `{parts_dir}`. Read one with "
             f"`cat {parts_dir}/<name>.py` when you need it; copy what fits.\n\n{index}\n{inline}")

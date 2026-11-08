@@ -1040,3 +1040,59 @@ def test_a_check_that_hangs_the_app_fails_alone(tmp_path, monkeypatch):
     monkeypatch.setenv("TRY_CHECK_SECONDS", "3")
     out = try_app(tmp_path, {"module": "h", "app_class": "H", "params": []}, "--checks", "checks.txt")
     assert "FAIL spins" in out and "did not finish within" in out and "PASS fine" in out
+
+
+def run_edit(tmp_path, name, text, blocks):
+    import subprocess
+    import sys
+
+    (tmp_path / name).write_text(text)
+    proc = subprocess.run([sys.executable, str(KITS_DIR / "tui" / "edit.py"), name], input=blocks, text=True,
+                          capture_output=True, cwd=tmp_path)
+    return proc.returncode, proc.stdout, (tmp_path / name).read_text()
+
+
+def block(old, new):
+    return f"<<<<<<< SEARCH\n{old}\n=======\n{new}\n>>>>>>> REPLACE\n"
+
+
+def test_edit_tool_replaces_each_block_once(tmp_path):
+    src = "def f():\n    return 1\n\n\ndef g():\n    return 2\n"
+    rc, out, text = run_edit(tmp_path, "a.py", src, block("    return 1", "    return 10") + block("def g():", "def h():"))
+    assert rc == 0 and text == "def f():\n    return 10\n\n\ndef h():\n    return 2\n" and "Edited a.py" in out
+
+
+def test_edit_tool_changes_nothing_when_a_block_is_ambiguous_or_missing(tmp_path):
+    src = "x = 1\ny = 1\nz = 1\n"
+    rc, out, text = run_edit(tmp_path, "a.py", src, block("x = 1", "x = 2") + block("= 1", "= 3"))
+    assert rc == 1 and text == src and "block 2: SEARCH matches nothing" in out  # "= 1" is not a whole line
+    rc, out, text = run_edit(tmp_path, "b.txt", "a\nb\na\n", block("a", "c"))
+    assert rc == 1 and text == "a\nb\na\n" and "matches 2 places (lines 1, 3)" in out
+    rc, out, text = run_edit(tmp_path, "c.py", "def f():\n    return 1\n", block("    return 7", "    return 2"))
+    assert rc == 1 and "Closest lines now in the file:" in out and "   2|     return 1" in out
+
+
+def test_edit_tool_refuses_an_edit_that_breaks_compiling_python(tmp_path):
+    src = "def f():\n    return 1\n"
+    rc, out, text = run_edit(tmp_path, "a.py", src, block("def f():", "def f(:"))
+    assert rc == 1 and text == src and "would not compile" in out
+
+
+def test_edit_tool_ignores_trailing_spaces_and_works_on_checks(tmp_path):
+    rc, out, text = run_edit(tmp_path, "checks.txt", "one: expect:\"a\"   \ntwo: expect:\"b\"\n",
+                             block("one: expect:\"a\"", "one: expect:\"A\""))
+    assert rc == 0 and text == "one: expect:\"A\"\ntwo: expect:\"b\"\n"
+
+
+def test_edit_section_only_with_the_experiment_switch(monkeypatch):
+    from lightness import kits
+
+    kit = kits.load_kit("tui")
+    names = {"module": "notes", "app_class": "NotesApp", "title": "Notes",
+             "params": [{"name": "data_path", "role": "data", "file": "notes.json"}], "empty_value": "[]", "sample_data": ""}
+    monkeypatch.delenv("LIGHTNESS_EDIT", raising=False)
+    off = kits.context(kit, names, ".lightness/kit/parts", [], "checks")
+    assert "## Changing a file" not in off and "(e.g. with sed)" in off
+    monkeypatch.setenv("LIGHTNESS_EDIT", "1")
+    on = kits.context(kit, names, ".lightness/kit/parts", [], "checks")
+    assert "## Changing a file" in on and "(with the edit command)" in on and "(e.g. with sed)" not in on

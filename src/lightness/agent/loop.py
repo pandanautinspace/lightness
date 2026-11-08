@@ -36,6 +36,9 @@ THINK_CUT = ("[harness] Your thinking ran out of room and was cut off, so anythi
              "a plan) is lost. Write code straight into the file with a command (cat > file <<'EOF' ...) and "
              "let the checks tell you what's wrong, instead of working it all out in your head first.")
 THINK: bool | int = int(os.environ["LIGHTNESS_THINK"]) if os.environ.get("LIGHTNESS_THINK") else True
+if os.environ.get("LIGHTNESS_EDIT"):  # speed experiment B: changes go through the kit's edit command
+    THINK_CUT = THINK_CUT.replace("(cat > file <<'EOF' ...)", "(a new file with cat > file <<'EOF' ..., a change to "
+                                  "one with python .lightness/kit/edit.py)")
 
 SYSTEM = "You are a helpful assistant that can interact with a computer."
 

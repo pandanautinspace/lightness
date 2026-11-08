@@ -341,6 +341,8 @@ class Kit(Middleware):
         if kit.try_tool:
             (parts_dir.parent / kit.try_tool.name).write_text(kit.try_tool.read_text())
             (parts_dir.parent / kit.try_tool.with_suffix(".json").name).write_text(json.dumps(names))
+        if kits.editing(kit):  # speed experiment B: the search/replace edit command
+            (parts_dir.parent / "edit.py").write_text((kit.dir / "edit.py").read_text())
         ctx.data["kit"] = (kit, names)
         ctx.log("kit", kind=kind, names=names, parts=chosen, tests=self.tests)
         return kits.context(kit, names, ".lightness/kit/parts", chosen, self.tests)

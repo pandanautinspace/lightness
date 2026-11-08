@@ -219,6 +219,8 @@ TRIES_AGAIN = ("[automatic checks] {n} try commands in a row with nothing change
                "have seen into checks.txt, or change the app.")
 CHECKS_IDLE = ("[automatic checks] All {n} checks pass and the last {steps} steps changed nothing. If something "
                "the task asks for isn't covered, add it as a check in checks.txt; otherwise submit now.")
+SAME_TEXT = ("[automatic checks] {files} was written again with exactly the same text as before: nothing "
+             "changed. Find the line you meant to change and change just that line.")
 CHECKS_BY_HAND = ("[automatic checks] That ran checks.txt by hand: the harness already ran it after the last change "
                   "and all {n} pass, so this tells you nothing new. Submit now, or add a check for anything the task "
                   "asks that checks.txt doesn't cover yet.")
@@ -343,6 +345,21 @@ class Kit(Middleware):
         ctx.log("kit", kind=kind, names=names, parts=chosen, tests=self.tests)
         return kits.context(kit, names, ".lightness/kit/parts", chosen, self.tests)
 
+    def _watched(self, ctx: Ctx) -> dict[str, tuple[int, str]]:
+        """The app module and checks.txt: name → (mtime_ns, text)."""
+        from lightness.kits import smoke
+
+        out = {}
+        for name in (f"{ctx.data['kit'][1]['module']}.py", smoke.CHECKS_FILE):
+            path = ctx.ws / name
+            if path.is_file():
+                out[name] = (path.stat().st_mtime_ns, path.read_text(errors="replace"))
+        return out
+
+    def before_command(self, ctx: Ctx, command: str) -> None:
+        if "kit" in ctx.data and ctx.data["kit"][0].category == "tui":
+            ctx.data["kit.before"] = self._watched(ctx)
+
     def after_command(self, ctx: Ctx, command: str, output: dict) -> str | None:
         from lightness.kits import smoke
 
@@ -350,6 +367,14 @@ class Kit(Middleware):
             return None
         kit, names = ctx.data["kit"]
         notes = []
+        # a file written again with the very same text: a whole-file rewrite meant as a fix that reproduced
+        # the file (the 35B rewrote checks.txt identically twice and, hearing nothing, took it as fixed)
+        before = ctx.data.get("kit.before") or {}
+        same = [n for n, (mtime, text) in self._watched(ctx).items()
+                if n in before and before[n][0] != mtime and before[n][1] == text]
+        if same:
+            ctx.log("kit.same_text", files=same)
+            notes.append(SAME_TEXT.format(files=" and ".join(same)))
         sig = repr(sorted(py_files(ctx.ws).items()))
         if sig != ctx.data.get("kit.sig"):  # something changed since the last smoke check
             ctx.data["kit.sig"] = sig

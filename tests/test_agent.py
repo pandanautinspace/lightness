@@ -388,6 +388,17 @@ def test_kit_checks_arm_says_running_passing_checks_by_hand_tells_nothing_new(ws
     assert "That ran checks.txt by hand" not in outs[0] and "That ran checks.txt by hand" in outs[1]
 
 
+def test_kit_checks_arm_says_when_a_file_was_written_again_unchanged(ws):
+    checks = write("checks.txt", "empty: expect-not:\"notes\"\n")
+    run_dir = ws.parent
+    env = os.environ | bench_env() | sandbox.sandbox_env(run_dir)
+    client = KitClient([checks, checks, SUBMIT, "echo never"], NOTES)
+    TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("checks")], step_limit=4).run("notes app")
+    outs = tool_outputs(client)
+    assert "written again with exactly the same text" not in outs[0]
+    assert "checks.txt was written again with exactly the same text" in outs[1]
+
+
 def test_checks_report_shows_every_malformed_line():
     results = {f"bad{i}": f"not run: 'x{i}' is not a step" for i in range(6)} | {"ok": None, "run": "FAILED expect:y"}
     text = mw.checks_text(results, [])

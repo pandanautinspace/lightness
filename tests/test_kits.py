@@ -1227,3 +1227,13 @@ def test_try_app_builtin_check_same_seed_same_start(tmp_path):
     out = try_app(tmp_path, names, "--builtin")
     assert "FAIL harness: the same seed gives the same start\n    two starts with seed=7 showed different screens (" in out
     assert "never from the random module's own functions" in out
+
+
+def test_try_app_table_header_names_its_cursor(tmp_path):
+    (tmp_path / "d.py").write_text(
+        "from textual.app import App\nfrom textual.widgets import DataTable\n\n\nclass D(App):\n"
+        "    def compose(self):\n        yield DataTable(id='t', cursor_type='row')\n\n"
+        "    def on_mount(self):\n        t = self.query_one(DataTable)\n        t.add_columns('a', 'b')\n"
+        "        t.add_row('1', '2')\n")
+    out = try_app(tmp_path, {"module": "d", "app_class": "D", "params": []})
+    assert "#t table 1 rows, cursor=(0, 0) (row cursor: left/right do nothing), columns=['a', 'b']:" in out

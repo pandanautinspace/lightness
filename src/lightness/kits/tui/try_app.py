@@ -91,7 +91,12 @@ def describe(widget) -> list[str]:
     if "DataTable" in bases:
         cols = [plain(c.label) for c in widget.columns.values()]
         body = [" | ".join(str(v) for v in widget.get_row_at(i)) for i in range(widget.row_count)]
-        head = f"{name(widget)} table {widget.row_count} rows, cursor={tuple(widget.cursor_coordinate)}, columns={cols}:"
+        # say what the cursor moves: csv-browser's table used a row cursor (left/right do nothing) in every run,
+        # though its task asked for a cell cursor, and sorting "by the cursor's column" could never change column
+        kind = {"row": "row cursor: left/right do nothing", "column": "column cursor: up/down do nothing",
+                "cell": "cell cursor", "none": "no cursor"}.get(widget.cursor_type, f"{widget.cursor_type} cursor")
+        head = (f"{name(widget)} table {widget.row_count} rows, cursor={tuple(widget.cursor_coordinate)} ({kind}), "
+                f"columns={cols}:")
         return [head] + [f"  [{i}] {t}" for i, t in enumerate(rows(body))]
     if "Tree" in bases:
         lines = []

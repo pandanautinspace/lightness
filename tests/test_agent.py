@@ -395,6 +395,13 @@ def test_checks_report_shows_every_malformed_line():
     assert "FAIL run\n  FAILED expect:y" in text and "Also failing" not in text
 
 
+def test_checks_report_keeps_the_failed_expect_line_before_a_long_screen():
+    detail = "after press:space:\n" + "\n".join(f"  row {i}" for i in range(30)) + \
+        "\nFAILED expect-not:eu-west: it is on the screen. Screen now:\n" + "\n".join(f"  [{i}] x" for i in range(25))
+    text = mw.checks_text({"collapse": detail}, [])
+    assert "FAILED expect-not:eu-west: it is on the screen" in text and "row 29" not in text
+
+
 def test_checks_report_says_malformed_lines_need_fixing_not_the_app():
     results = {"bad": "not run: 'Site' is not a step", "ok": None, "run": "FAILED expect:y"}
     first = mw.checks_text(results, []).splitlines()[0]

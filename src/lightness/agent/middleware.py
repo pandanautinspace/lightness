@@ -236,6 +236,18 @@ def not_run(results: dict[str, str | None]) -> list[str]:
     return [n for n, v in results.items() if v is not None and v.startswith("not run:")]
 
 
+def check_detail(detail: str) -> list[str]:
+    """The lines of one failing check worth showing: from its first failed expect (and the screen after
+    it), or its last lines (a crash ends the output). A tail alone cut the FAILED line off when a long
+    tree followed it, and the 35B spent 3 steps guessing which expect failed (json-viewer)."""
+    rows = detail.splitlines()
+    failed = [k for k, line in enumerate(rows) if line.lstrip().startswith("FAILED ")]
+    if not failed:
+        return rows[-CHECK_LINES:]
+    shown = rows[failed[0]:failed[0] + CHECK_LINES]
+    return shown + [rows[k].strip() for k in failed if k >= failed[0] + CHECK_LINES]
+
+
 def checks_text(results: dict[str, str | None], regressions: list[str]) -> str:
     failing = {n: v for n, v in results.items() if v is not None}
     lines = [f"{len(results) - len(failing)} of {len(results)} checks pass."]
@@ -248,7 +260,7 @@ def checks_text(results: dict[str, str | None], regressions: list[str]) -> str:
     ran = {n: v for n, v in failing.items() if not v.startswith("not run:")}
     for n, detail in list(ran.items())[:CHECKS_SHOWN]:
         lines.append(f"FAIL {n}" + (" (passed before this change)" if n in regressions else ""))
-        lines += ["  " + line for line in detail.splitlines()[-CHECK_LINES:]]
+        lines += ["  " + line for line in check_detail(detail)]
     if len(ran) > CHECKS_SHOWN:
         lines.append(f"Also failing: {', '.join(list(ran)[CHECKS_SHOWN:])}")
     if not failing:

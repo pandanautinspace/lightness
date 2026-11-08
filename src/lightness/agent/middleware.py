@@ -238,6 +238,7 @@ CHECKS_FAIL_HINT = ("Each check started a fresh app: it sees nothing another che
 CHECKS_ALL_PASS = "If checks.txt covers every item of the task's contract, submit now; otherwise add the missing checks."
 CHECKS_NOT_RUN = ("{k} of them did not run: their own lines in checks.txt have a mistake (shown below). No change "
                   "to the app can fix those; fix the lines in checks.txt first.")
+STEP_PROBLEM = re.compile(r"can't be clicked|no widget matches|needs a clock parameter|unknown step|the app exited")
 CHECKS_SHOWN, CHECK_LINES = 4, 15  # failing checks shown in full, and lines of each
 
 
@@ -255,7 +256,10 @@ def check_detail(detail: str) -> list[str]:
     if not failed:
         return rows[-CHECK_LINES:]
     shown = rows[failed[0]:failed[0] + CHECK_LINES]
-    return shown + [rows[k].strip() for k in failed if k >= failed[0] + CHECK_LINES]
+    # a step that couldn't do what it said ("can't be clicked: ... cut off") comes before the FAILED line
+    # and is often the reason for it: keep those (the 35B chased 'Static gets no clicks' without it)
+    before = [line for line in rows[:failed[0]] if STEP_PROBLEM.search(line)]
+    return before + shown + [rows[k].strip() for k in failed if k >= failed[0] + CHECK_LINES]
 
 
 def checks_text(results: dict[str, str | None], regressions: list[str]) -> str:

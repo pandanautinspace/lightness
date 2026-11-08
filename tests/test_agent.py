@@ -411,6 +411,9 @@ def test_checks_report_keeps_the_failed_expect_line_before_a_long_screen():
         "\nFAILED expect-not:eu-west: it is on the screen. Screen now:\n" + "\n".join(f"  [{i}] x" for i in range(25))
     text = mw.checks_text({"collapse": detail}, [])
     assert "FAILED expect-not:eu-west: it is on the screen" in text and "row 29" not in text
+    detail = "after click:#c:\n  #c can't be clicked: it is cut off\n" + "\n".join(f"  r{i}" for i in range(20)) + \
+        "\nFAILED expect:Moves: 1: not on the screen. Screen now:\n  x"
+    assert "#c can't be clicked: it is cut off" in mw.checks_text({"click": detail}, [])
 
 
 def test_checks_report_says_malformed_lines_need_fixing_not_the_app():

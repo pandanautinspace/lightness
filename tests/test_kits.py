@@ -691,14 +691,17 @@ def test_try_app_checks_file(tmp_path):
         "wrong: press:plus expect:\"count 9\" press:plus\n"
         "no name here\n"
         "quotes: expect:\"oops\n"
-        "bad option: --nope expect:x\n")
+        "bad option: --nope expect:x\n"
+        "late option: press:plus --file-text path=3 expect:x\n")
     out = try_app(tmp_path, COUNTER, "--checks", "checks.txt")
     assert "PASS bump\n" in out
     assert "FAIL wrong\n" in out and "FAILED expect:count 9" in out and "after press:plus:\n      #shown: 'count 1'" in out
     assert "FAIL line 5\n    not a check:" in out
     assert "FAIL quotes\n    not run: can't split the line into steps" in out
     assert "FAIL bad option\n" in out
-    assert out.strip().endswith("1 of 5 checks pass")
+    assert "FAIL late option\n    not run: unrecognized arguments: expect:x (options like --kw go before" in out
+    assert "usage:" not in out
+    assert out.strip().endswith("1 of 6 checks pass")
 
 
 def test_try_app_builtin_checks(tmp_path):

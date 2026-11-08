@@ -901,8 +901,17 @@ def file_checks(config: dict, cls, path: Path) -> list[tuple[str, str | None]]:
             except ValueError as e:  # shlex: unbalanced quotes
                 rc = 2
                 say(f"can't split the line into steps: {e}")
-            except SystemExit:  # argparse rejected an option
+            except SystemExit:  # argparse rejected an option: say it as a line mistake, not a usage dump
                 rc = 2
+                err = next((x.split("error:", 1)[1].strip() for x in reversed(buf.getvalue().splitlines())
+                            if "error:" in x), "an option it doesn't know")
+                buf.seek(0)
+                buf.truncate()
+                OUT[0] = sys.__stdout__
+                out.append((name.strip(), f"not run: {err} (options like --kw go before the steps; text with spaces "
+                            "needs quotes around the whole step, e.g. expect:\"class on: #cell-0-0\")"))
+                signal.alarm(0)
+                continue
             finally:
                 signal.alarm(0)
                 OUT[0] = sys.stdout
@@ -1103,6 +1112,7 @@ def builtin_checks(config: dict, cls) -> list[tuple[str, str | None]]:
     seen, problems = asyncio.run(buttons())
     if seen:
         out.append(("harness: every button can be clicked", "\n".join(problems[:3]) or None))
+
     if any(p["role"] == "clock" for p in params):
         async def time_moves():
             tmp = Path(tempfile.mkdtemp(prefix="check-", dir=".lightness"))

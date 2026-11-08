@@ -241,7 +241,8 @@ CHECKS_ALL_PASS = ("If checks.txt covers every item of the task's contract, subm
                    "command of its own; otherwise add the missing checks.")
 CHECKS_NOT_RUN = ("{k} of them did not run: their own lines in checks.txt have a mistake (shown below). No change "
                   "to the app can fix those; fix the lines in checks.txt first.")
-STEP_PROBLEM = re.compile(r"can't be clicked|no widget matches|needs a clock parameter|unknown step|the app exited")
+STEP_PROBLEM = re.compile(r"can't be clicked|no widget matches|needs a clock parameter|unknown step|the app exited"
+                          r"|did nothing: |as text: an Input has focus|dropped the keys that don't fit")
 CHECKS_SHOWN, CHECK_LINES = 4, 15  # failing checks shown in full, and lines of each
 
 

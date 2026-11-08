@@ -532,7 +532,16 @@ async def run(cls, kw, data_files: dict[str, Path], clock: FakeClock | None, ste
                     elif action == "press":
                         focused = app.focused
                         typed_before = getattr(focused, "value", None) if type(focused).__name__ == "Input" else None
+                        table_before = (focused.cursor_type, tuple(focused.cursor_coordinate)) \
+                            if type(focused).__name__ == "DataTable" else None
                         await pilot.press(*keys_of(value))
+                        dead = {"row": {"left", "right"}, "column": {"up", "down"}}
+                        if table_before and set(keys_of(value)) & dead.get(table_before[0], set()) \
+                                and tuple(focused.cursor_coordinate) == table_before[1]:
+                            # csv-browser (every run): a row-cursor table, checks pressing right to reach a column
+                            moved = "left/right" if table_before[0] == "row" else "up/down"
+                            say(f"  ({moved} did nothing: {name(focused)} has a {table_before[0]} cursor. For a cursor "
+                                f"that moves by cell, create it with DataTable(cursor_type=\"cell\"))")
                         letters = [k for k in keys_of(value) if len(k) == 1 and k.isprintable()]
                         if typed_before is not None and letters and getattr(focused, "value", None) != typed_before:
                             # the 35B's checks did focus:#search press:a and then reworked the app's focus for

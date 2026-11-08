@@ -1282,3 +1282,16 @@ def test_try_app_builtin_button_check_looks_in_every_tab(tmp_path):
     (tmp_path / "t.py").write_text(app.replace("BOX", "4"))
     out = try_app(tmp_path, names, "--builtin")
     assert "FAIL harness: every button can be clicked\n    #add (on tab two) can't be clicked" in out
+
+
+def test_try_app_says_left_right_do_nothing_on_a_row_cursor_table(tmp_path):
+    app = ("from textual.app import App\nfrom textual.widgets import DataTable\n\n\nclass D(App):\n"
+           "    def compose(self):\n        yield DataTable(id='t', cursor_type='KIND')\n\n"
+           "    def on_mount(self):\n        t = self.query_one(DataTable)\n        t.add_columns('a', 'b')\n"
+           "        t.add_row('1', '2')\n")
+    names = {"module": "d", "app_class": "D", "params": []}
+    (tmp_path / "d.py").write_text(app.replace("KIND", "row"))
+    out = try_app(tmp_path, names, "focus:#t", "press:right")
+    assert "(left/right did nothing: #t has a row cursor. For a cursor that moves by cell" in out
+    (tmp_path / "d.py").write_text(app.replace("KIND", "cell"))
+    assert "did nothing" not in try_app(tmp_path, names, "focus:#t", "press:right")

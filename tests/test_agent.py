@@ -593,3 +593,11 @@ def test_kit_says_when_the_app_still_crashes_the_same_way_after_a_change(ws):
     TranscriptAgent(client, ws, run_dir, env, middleware=[mw.Kit("none")], step_limit=4).run("notes app")
     outs = tool_outputs(client)
     assert "crashes" in outs[0] and "Still crashes on start with the same error" in outs[1]
+
+
+def test_check_detail_keeps_step_notes_the_final_screen_cant_show():
+    detail = ("after focus:#t:\n  focus: #t\nafter press:right:\n"
+              "  (left/right did nothing: #t has a row cursor. For a cursor that moves by cell, ...)\n"
+              "FAILED expect:x: not on the screen. Screen now:\n  #t table 1 rows")
+    out = mw.check_detail(detail)
+    assert out[0].startswith("  (left/right did nothing: #t has a row cursor") and out[1].startswith("FAILED expect:x")

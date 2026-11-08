@@ -756,3 +756,94 @@ quirk) rather than a few big ones. Two things stand out for next time:
 **Next:** a fourth pass from `e91e52f` over all 9 with the same settings, the stall rule, and the
 same batch method; the full 9 × 3 bench only after a pass where every task finishes first time
 (ask the user first).
+
+### Fourth consistency pass, 2026-11-08
+
+**Method.** All 9 tasks as comma-separated `--tasks` batches, `LIGHTNESS_EDIT=1 LIGHTNESS_THINK=4096`,
+`--tests checks`, qwen35a3 on AC power, watched step by step under the stall rule. On a stall the
+batch was stopped, the cause fixed for the whole category and committed, and the batch restarted
+with the remaining tasks and the stopped one last. Before the pass, every hidden spec failure of
+passes 2 and 3 was read to separate spec ambiguity from model mistakes. Since kit files are copied
+per task, a fix lands only in later tasks of the next batch, so the rows below come from three code
+points (column "code").
+
+**Spec fixes (bench tasks).**
+
+- stopwatch lost the same 2 tests in all 4 earlier runs: the app rounded tenths (3.06 s →
+  `00:03.1`), the tests cut them. The contract now says tenths are cut, not rounded (`f05a3ae`).
+  In pass 4 the model wrote cut-tenths checks and passed both tests.
+- trip-split: "enter adds the name and clears the input; blank input adds nothing" left open
+  whether a blank entry is cleared; the hidden test expects it. Now said (`7967fc3`).
+- csv-browser's `sort_by` test helper pressed `right` until the cursor reached the column, forever
+  when the table had a row cursor: 4 tests timed out (20 s each) in every csv-browser run since
+  11-06. It now gives up after 20 presses and fails in ~1 s with a message; the oracle still
+  passes 14/14 (`8898f3c`).
+- loan-calc's zero rate is left as is: the formula is undefined at 0, but that case is tested only
+  as an intent test (the user would expect interest-free), on purpose.
+
+**Results.**
+
+| task | first try | code | spec | intent | steps | wall s | out tokens |
+|---|---|---|---|---|---|---|---|
+| lights-out | finished | `322a96e` | 8/9 | 0/3 | 9 | 273 | 10.9k |
+| stopwatch | finished | `322a96e` | 7/8 | 0/3 | 12 | 198 | 6.1k |
+| notepad | finished | `bc6883f` | 11/11 | 0/2 | 6 | 82 | 2.9k |
+| csv-browser | finished | `bc6883f` | 9/11 | 0/3 | 7 | 163 | 6.7k |
+| airport-lookup | finished | `bc6883f` | 10/11 | 0/3 | 11 | 185 | 6.6k |
+| trip-split | finished | `bc6883f` | 10/11 | 1/3 | 9 | 461 | 15.8k |
+| loan-calc | finished | `bc6883f` | 11/11 | 1/3 | 10 | 260 | 9.8k |
+| bookmarks | finished | `bc6883f` | 10/11 | 0/3 | 13 | 588 | 14.1k |
+| json-viewer | stopped 3 times (steps 14, 14, 18) | | | | | | |
+
+8 of 9 finished on their first attempt in this pass (pass 3: 3 of 9), including the three that
+never finished in pass 3 (bookmarks, lights-out, loan-calc). Spec: 76/83 on the 8 finished.
+loan-calc and bookmarks were each stopped once early (steps 3 and 10) before their counted run.
+
+**Stops and fixes.**
+
+- loan-calc wrote `expect:"$#payment"` and `expect-not:"$"`: my exact-text tip's example was a
+  JSONPath (`$.a`), and the model copied the `$` as syntax. Neutral example (`a14cf24`).
+- bookmarks did `result = await self.push_screen(dialog)`, which is always None: every add saved
+  nothing, and 3 try steps went to the enter handler. The start check now warns (`322a96e`); in
+  the counted run the model wrote the same line, read the warning, and switched to a callback.
+- json-viewer wrote `expect:"#path '$'"` (no colon), later `expect:"#path: $"` (no quotes), for 3
+  steps each: the failure now says the screen has `#path: '$'` and to write it so (`48ae9bf`,
+  `10c8477`). The exact-text form itself worked: it caught the `Path: $` prefix that cost pass 3
+  six spec tests, and the model fixed the app.
+- json-viewer annotated with `Tree.Node` (no such thing) in all 3 runs and fixed it one crash per
+  step: the start check now lists every line using a missing class attribute (`c0dfae3`), and the
+  cheat sheet names `TreeNode` (`b5e38d8`). It also rebuilt each node's path from labels and
+  parents, crashing on None; the tree part says to put the path in `node.data` (`636ca39`).
+- json-viewer's last stop: 6 steps at 11/18 of its own (wrong) checks, going try, try, `cat`, edit,
+  try, try; each `cat` reset the three-tries nudge. A command that changes nothing no longer
+  resets it (`4d91a3b`).
+
+**Spec loss in finished runs, by cause, and the fix for each** (none of these stalled a run):
+
+- lights-out drew from `random.choice` after making `self.rng = random.Random(seed)` (also in pass
+  2): built-in check, the same seed gives the same start (`c9a6c0d`).
+- stopwatch's pause showed `00:00.0` right after the clock moved (also in pass 3): try's
+  `advance:` lets the timer tick, so no check could see it. The timer part and notes say a key that
+  changes what's shown updates the screen itself (`bc6883f`).
+- bookmarks' Cancel button was cut off by its dialog (also in pass 2); the model's check focused it
+  and pressed enter, as try's click note suggested. Built-in check, every button on every screen a
+  key opens can be clicked; the note no longer suggests focus+enter (`7086603`).
+- airport-lookup saved a favourite but didn't redraw the ★: checks.md says a key that changes
+  saved data gets a file check and a screen check (`ec498d9`).
+- csv-browser used a row cursor (every run since 11-06) though the task asks for a cell cursor: the
+  table header names the cursor kind ("row cursor: left/right do nothing", `6318a83`).
+- Also: the grid dump names the first and last cell id (`35853e5`); a SyntaxError now shows its
+  file:line, line and caret instead of just "invalid syntax" (`ee1a87c`).
+
+All 9 references pass the new built-in checks; the seed and button checks fail the pass-4 apps
+that lost those tests.
+
+**Edits.** Every run used `edit_file` for most changes; whole-file rewrites still happen after a
+missed edit or for larger reworks (trip-split, lights-out, json-viewer).
+
+**Intent** stays low (4/26): the hidden intent tests (undo, hours format, newest lap first, numeric
+sort) ask for things the contract doesn't, and the checks arm only covers the contract.
+
+**Next:** a fifth pass from `b5e38d8` over all 9, json-viewer last, with no fixes expected to land
+mid-pass, to see first-try consistency on one code version. The full 9 × 3 bench only after a pass
+where every task finishes first time (ask the user first).

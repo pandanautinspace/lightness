@@ -396,6 +396,10 @@ def expectation(action: str, value: str, state: dict[str, list[str]], data_files
     if not want:
         return f"{action}: needs the text to look for (an empty {action}: checks nothing)"
     found = want in screen
+    if not found and (m := re.fullmatch(r"(#[\w-]+)\s+('.*'|\".*\")", want)):
+        # "#path '$'" can only mean "#path: '$'": the 35B drops the colon in nearly every run and kept doing so
+        # after the hint named the right form (json-viewer, passes 4-6), so take it as meant
+        found = f"{m[1]}: {m[2]}" in screen
     if action == "expect":
         if found:
             return None

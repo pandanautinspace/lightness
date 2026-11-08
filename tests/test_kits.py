@@ -1201,8 +1201,8 @@ def test_try_app_header_shows_kw_values_with_their_type_and_exact_text_expects_w
     out = try_app(tmp_path, names, "--kw", "board=.....,.....", "expect:#path: '$.a'", "expect:$.a")
     assert "board='.....,.....' (str)" in out
     assert "FAILED expect:#path: '$.a'" in out and "ok: expect:$.a" in out
-    out = try_app(tmp_path, names, "expect:#path 'Path: $.a'")
-    assert "not on the screen as written (the screen has #path: 'Path: $.a': write it exactly so" in out
+    out = try_app(tmp_path, names, "expect:#path 'Path: $.a'", "expect-not:#path 'Path: $.a'")
+    assert "ok: expect:#path 'Path: $.a'" in out and "FAILED expect-not:#path 'Path: $.a'" in out  # colon taken as meant
     (tmp_path / "q.py").write_text((tmp_path / "k.py").read_text().replace("'Path: $.a'", "'\"W1\"'")
                                    .replace("class K", "class Q"))
     q = names | {"module": "q", "app_class": "Q"}

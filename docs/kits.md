@@ -1026,8 +1026,8 @@ Spec and intent per run (spec without the intent tests; rescored):
 | stopwatch | 8/8 8/8 8/8 | 0 0 0 /3 | 1072 319 603 | 44.2k 11.0k 23.1k |
 | trip-split | 11/11 11/11 11/11 | 1 1 1 /3 | 573 782 315 | 18.5k 25.4k 10.2k |
 
-**Totals:** spec 261/279 (93.5%), 20 of 27 runs at full spec; intent 15/78. Five tasks were at full spec
-in all three runs (loan-calc, notepad, stopwatch, trip-split, and lights-out but for one run).
+**Totals:** spec 261/279 (93.5%), 20 of 27 runs at full spec; intent 15/78. Four tasks were at full spec
+in all three runs (loan-calc, notepad, stopwatch, trip-split).
 
 **Where the spec loss is.** Every lost spec test is a real app bug, and in every case the model's own
 checks passed while the bug was there: the checks could not fail.

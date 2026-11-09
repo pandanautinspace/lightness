@@ -992,3 +992,70 @@ count as a stall is a judgement call for the user; under the rule as written, no
 first-try yet (best: 8 of 9 in passes 4 and 6).
 
 **Next:** the user decides between another pass and the full 9 × 3 bench.
+
+### Full bench, 9 tasks × 3 runs, local 35B, checks arm, 2026-11-08
+
+**Method.** One batch, `--tasks all --runs 3`, code at `9517d15`, `LIGHTNESS_EDIT=1
+LIGHTNESS_THINK=4096`, batch `runs/kit-tui-20261108-184049-mw-env.guard.kit-tests.checks-qwen35a3-70576`.
+No stops: every run went to the end. After each run the logs were audited for anything that would make
+the result useless (exit status, verify errors or timeouts, test counts against the expected ones,
+failed model calls, harness tracebacks, repeated commands, submitting with failing checks), and every
+failing hidden test was read. **Power:** the first ~10 runs ran on battery at ~30 tok/s instead of
+~53, so wall times of airport-lookup, bookmarks, csv-browser and json-viewer/0 are not comparable with
+earlier passes; compare output tokens.
+
+**Audit.** All 27 runs submitted; no verify error, timeout, failed model call or harness traceback,
+and every run has the expected test count. One hidden-test bug was found and fixed (`25eb8e5`):
+loan-calc's garbage-input tests typed letters into the principal and required `-invalid`, but an
+`Input(type="number")`, which our own `parts/input_form.py` teaches, refuses the letters and stays
+empty, which the contract allows. The oracle still passes 14/14, and the three loan-calc runs were
+re-scored from their saved workspaces into `results.rescored.jsonl` (run 0: 10/11 → 11/11 spec);
+`results.jsonl` is left as run.
+
+Spec and intent per run (spec without the intent tests; rescored):
+
+| task | spec | intent | wall s | out tokens |
+|---|---|---|---|---|
+| airport-lookup | 10/11 10/11 11/11 | 0 0 0 /3 | 209 369 638 (battery) | 4.6k 7.7k 14.7k |
+| bookmarks | 11/11 9/11 11/11 | 0 0 0 /3 | 1121 962 1449 (battery) | 22.7k 20.6k 22.0k |
+| csv-browser | 11/11 11/11 9/11 | 0 1 1 /3 | 175 395 1270 (battery) | 3.9k 10.3k 35.0k |
+| json-viewer | 10/10 3/10 6/10 | 2 1 0 /3 | 1149 433 190 | 24.0k 16.1k 8.0k |
+| lights-out | 9/9 8/9 9/9 | 2 1 1 /3 | 217 349 299 | 9.1k 15.0k 12.8k |
+| loan-calc | 11/11 11/11 11/11 | 1 1 1 /3 | 255 225 270 | 10.7k 9.1k 10.7k |
+| notepad | 11/11 11/11 11/11 | 0 0 0 /2 | 190 445 106 | 6.9k 20.6k 3.7k |
+| stopwatch | 8/8 8/8 8/8 | 0 0 0 /3 | 1072 319 603 | 44.2k 11.0k 23.1k |
+| trip-split | 11/11 11/11 11/11 | 1 1 1 /3 | 573 782 315 | 18.5k 25.4k 10.2k |
+
+**Totals:** spec 261/279 (93.5%), 20 of 27 runs at full spec; intent 15/78. Five tasks were at full spec
+in all three runs (loan-calc, notepad, stopwatch, trip-split, and lights-out but for one run).
+
+**Where the spec loss is.** Every lost spec test is a real app bug, and in every case the model's own
+checks passed while the bug was there: the checks could not fail.
+
+- json-viewer/1 (3/10): the app used id `detail-pane` where the task says `detail`; every check
+  used the app's id. json-viewer/2 (6/10): `#detail` showed `repr` (`'Bob'`), not JSON; five checks only
+  expected `#detail` (it exists) and the string check matched the tree label.
+- csv-browser/2 (9/11): a sync `action_sort` called the async `refresh_view()` without `await`, so
+  sorting never happened; the sort checks only expected the row count. The run also spent ~15 steps
+  probing the DataTable API (`cursor_coordinate.column_key`, which doesn't exist).
+- bookmarks/1 (9/11): an unscoped App `on_input_changed` also caught the add dialog's Inputs, so the
+  last URL typed became the search filter; the add checks only ran from an empty store.
+- lights-out/1 (8/9): with no board the app never drew a random puzzle at start; the built-in seed
+  check passed because an all-dark board is the same every time.
+- airport-lookup/0,1 (10/11): `#detail` didn't follow the highlight.
+
+**Slow runs.** stopwatch/0 (38 steps, 44k tokens) spent ~11 min on lap checks timed exactly on a
+tenth: float clock math lands just under (10.3 s → `00:10.2`) and truncation flips them; it ignored
+three "stop exploring" nudges. csv-browser/2 is the other (above).
+
+**Next, all general (none tuned to a task):**
+
+1. A built-in check that every widget id the task names exists in the app, naming the near miss
+   (`#detail-pane`).
+2. Checks that can't fail: a note when an expect is only `#id`, when a bare text expect matched a widget
+   other than the one the check is about, and when a press step changed nothing on screen.
+3. A smoke lint for a call to an `async def` method of the same class that is never awaited.
+4. Cheat sheet: messages from a modal's widgets bubble to the App, so scope handlers
+   (`@on(Input.Changed, "#search")`).
+5. Seed built-in: a note when seeds 1, 2 and 3 all give the same start.
+6. checks.md: advance timers by values clear of a display boundary (3.06 s, not 3.0).

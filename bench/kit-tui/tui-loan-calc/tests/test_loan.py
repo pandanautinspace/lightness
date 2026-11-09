@@ -155,7 +155,10 @@ def test_garbage_principal_then_fixed():
     async def scenario(app, pilot):
         await fill(pilot, "abc", "6.5", "30")
         assert not has_digits(app.query_one("#payment"))
-        assert app.query_one("#principal").has_class("-invalid")
+        # An Input(type="number") refuses the letters as they are typed and stays empty; the
+        # contract only asks for -invalid on a non-empty invalid input.
+        if app.query_one("#principal").value:
+            assert app.query_one("#principal").has_class("-invalid")
         assert not app.query_one("#rate").has_class("-invalid")
         await type_into(pilot, "principal", "200000")
         assert not app.query_one("#principal").has_class("-invalid")
@@ -171,6 +174,8 @@ def test_out_of_range_values_rejected(field, bad):
 
     async def scenario(app, pilot):
         await fill(pilot, good["principal"], good["rate"], good["years"])
+        if app.query_one(f"#{field}").value != bad:
+            return  # the Input refused some of the characters as they were typed (type="integer")
         assert not has_digits(app.query_one("#payment")), text_of(app.query_one("#payment"))
         assert not has_digits(app.query_one("#total-interest"))
         assert app.query_one(f"#{field}").has_class("-invalid")

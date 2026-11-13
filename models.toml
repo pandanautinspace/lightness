@@ -24,6 +24,21 @@ context = 65536
 mode = "strict"
 caps = { json_schema = true, thinking_toggle = true, thinking_budget_field = "thinking_budget_tokens" }
 
+# Liquid AI. Sampling (temp 0.1, top_k 50, repetition penalty) is set server-side in serve.sh.
+[lfm24]
+base_url = "http://127.0.0.1:8080/v1"
+model = "lfm24"
+context = 65536
+mode = "strict"
+caps = { json_schema = true, thinking_toggle = true, thinking_budget_field = "thinking_budget_tokens" }
+
+[lfm3]
+base_url = "http://127.0.0.1:8081/v1"
+model = "lfm3"
+context = 65536
+mode = "strict"
+caps = { json_schema = true, thinking_toggle = true, thinking_budget_field = "thinking_budget_tokens" }
+
 # Hosted models (MIT Parley). The key comes from $OPENAI_API_KEY or the git-ignored .env.parley.
 # timeout: seconds per request (local models keep the client default, 900 s).
 # The proxy ignores reasoning_effort; GPT-5 models always reason and don't return the reasoning.

@@ -89,6 +89,27 @@ def _blocks(text: str, keep: set[str]) -> str:
 
 
 FILE_ROLES = ("data", "input")
+_INIT_SIG = re.compile(r"__init__\(\s*self\s*((?:,[^)]*)?)\)")
+
+
+def contract_params(task: str) -> list[str] | None:
+    """The parameter names of the `__init__(self, ...)` the task states, or None when it states none
+    (or several that differ)."""
+    sigs = {tuple(m2[1] for arg in m[1].split(",")[1:] if (m2 := re.match(r"\s*\*{0,2}([A-Za-z_]\w*)\s*(?:[:=]|$)", arg)))
+            for m in _INIT_SIG.finditer(task)}
+    return list(sigs.pop()) if len(sigs) == 1 else None
+
+
+def check_params(names: dict, task: str) -> tuple[dict, list[str]]:
+    """Drop extracted __init__ parameters the stated signature doesn't have. Without thinking,
+    LFM2.5-24B listed a calculator's three Input ids as data files of `__init__(self)`, and every start
+    check and try then passed them as arguments. Returns the names and the dropped parameter names."""
+    stated = contract_params(task)
+    if stated is None:
+        return names, []
+    kept = [p for p in names.get("params") or [] if p["name"] in stated]
+    dropped = [p["name"] for p in names.get("params") or [] if p["name"] not in stated]
+    return ({**names, "params": kept} if dropped else names), dropped
 
 
 def file_params(names: dict) -> list[dict]:

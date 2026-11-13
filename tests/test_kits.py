@@ -1346,3 +1346,25 @@ def test_try_app_expect_does_not_match_the_harness_notes(tmp_path):
     out = try_app(tmp_path, {"module": "m", "app_class": "M", "params": []}, "expect:modified", "expect-not:modified")
     assert "was read as markup" in out  # the note is still shown
     assert "FAILED expect:modified" in out and "ok: expect-not:modified" in out  # but not matched
+
+
+def test_contract_params_reads_the_stated_signature():
+    from lightness.kits import contract_params
+    assert contract_params("`LoanApp` with `__init__(self)` (no arguments)") == []
+    assert contract_params("__init__(self, board=None, seed=None)") == ["board", "seed"]
+    assert contract_params("__init__(self, clock=time.monotonic)") == ["clock"]
+    assert contract_params('__init__(self, path: str = "notes.json")') == ["path"]
+    assert contract_params("no signature here") is None
+    assert contract_params("__init__(self) or __init__(self, x)") is None  # ambiguous: trust the model
+
+
+def test_check_params_drops_what_the_signature_lacks():
+    from lightness.kits import check_params
+    inputs = [{"name": n, "role": "data", "file": f"{n}.json"} for n in ("principal", "rate", "years")]
+    names, dropped = check_params({"module": "loan", "params": inputs}, "with `__init__(self)` (no arguments)")
+    assert names["params"] == [] and dropped == ["principal", "rate", "years"]
+    ok = [{"name": "data_path", "role": "data", "file": "notes.json"}]
+    names, dropped = check_params({"params": ok}, "__init__(self, data_path)")
+    assert names["params"] == ok and dropped == []
+    names, dropped = check_params({"params": ok}, "no signature stated")
+    assert names["params"] == ok and dropped == []

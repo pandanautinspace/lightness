@@ -374,6 +374,9 @@ class Kit(Middleware):
         try:
             names = ctx.client.decide([{"role": "user", "content": kit.names_prompt(task)}], kit.names_schema,
                                       purpose="kit.names", max_tokens=1500).parsed
+            names, dropped = kits.check_params(names, task)
+            if dropped:
+                ctx.log("kit.params_dropped", params=dropped)
             shell = kits.render_shell(kit, names)
             names = kits.fill_input_files(names, ctx.ws)  # after the shell: only what try/checks start with
         except (DecisionError, ValueError) as e:

@@ -464,6 +464,15 @@ def test_kit_checks_arm_nudges_after_three_tries_in_a_row(ws):
     assert "4 try commands in a row with nothing changed" in outs[4]
 
 
+def test_reading_the_try_script_is_not_a_try():
+    assert mw.is_try("python .lightness/kit/try_app.py press:a")
+    assert mw.is_try("cd . && python3 -u .lightness/kit/try_app.py type:x")
+    assert not mw.is_try("python .lightness/kit/try_app.py --checks")
+    for look in ["cat .lightness/kit/try_app.py", "sed -n '1,120p' .lightness/kit/try_app.py",
+                 "grep -n def .lightness/kit/try_app.py", "cat .lightness/kit/try_app.json"]:
+        assert not mw.is_try(look), look
+
+
 def test_kit_checks_arm_try_streak_survives_a_look_that_changes_nothing(ws):
     checks = write("checks.txt", "count: expect:\"1 notes\"\n")
     tri = "python .lightness/kit/try_app.py press:a > /dev/null 2>&1; true"

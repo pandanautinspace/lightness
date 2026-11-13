@@ -216,6 +216,15 @@ CHECKS_SUSPECT = ("Two app changes in a row fixed none of them, so suspect the c
 TRIES_NUDGE = ("[automatic checks] That's three try commands in a row with no change to the app or checks.txt. "
                "Put what you learned into checks.txt now (fix the checks that were wrong, add what you were "
                "verifying by hand: each line runs after every change), or change the app.")
+# runs the try script (not --checks); reading its source (cat, sed, grep on try_app.py) is not a try:
+# LFM3-1.7B read the script for 20 steps and every read was refused as a "try command"
+TRY_RUN = re.compile(r"\bpython[\d.]*\s+(?:-\S+\s+)*\S*try_app\.py\b")
+
+
+def is_try(command: str) -> bool:
+    return bool(TRY_RUN.search(command)) and "--checks" not in command
+
+
 TRIES_REFUSE_AFTER = 4  # try commands in a row with nothing changed; the next one isn't run
 TRIES_REFUSED = ("Not run: {n} try commands in a row with no change to the app or checks.txt. Write what you have "
                  "learned into checks.txt (or change the app) first; the try command runs again after any change.")
@@ -430,7 +439,7 @@ class Kit(Middleware):
         if "kit" not in ctx.data or ctx.data["kit"][0].category != "tui":
             return None
         ctx.data["kit.before"] = self._watched(ctx)
-        if self.tests == "checks" and "try_app" in command and "--checks" not in command \
+        if self.tests == "checks" and is_try(command) \
                 and ctx.data.get("kit.tries", 0) >= TRIES_REFUSE_AFTER and self._try_state(ctx) == ctx.data.get("kit.try_state"):
             # twice told, the 35B kept probing a tree one try at a time (json-viewer, 3 runs): refuse
             ctx.log("kit.try_refused", tries=ctx.data["kit.tries"])
@@ -501,11 +510,11 @@ class Kit(Middleware):
 
         checks_file = ctx.ws / smoke.CHECKS_FILE
         state = (sig, checks_file.read_text() if checks_file.exists() else None)
-        is_try = "try_app" in command and "--checks" not in command
+        trying = is_try(command)
         if state != ctx.data.get("kit.try_state"):
-            ctx.data["kit.try_state"], ctx.data["kit.tries"] = state, (1 if is_try else 0)
+            ctx.data["kit.try_state"], ctx.data["kit.tries"] = state, (1 if trying else 0)
             return None
-        if not is_try:
+        if not trying:
             # a look that changed nothing (cat, grep) keeps the streak: the 35B went try, try, cat, edit, try, try
             # on json-viewer and the nudge never came (each cat reset it)
             return None

@@ -49,6 +49,17 @@ def test_thinking_budget_sets_field_and_headroom(tmp_path):
     assert seen[0]["max_tokens"] == 356
 
 
+def test_thinking_off_by_zero_budget_for_always_thinking_models(tmp_path):
+    transport, seen = fake_server("hi", "hi", "hi")
+    client = make_client(transport, tmp_path, caps=Caps(thinking_off_by_budget=True))
+    client.chat([{"role": "user", "content": "q"}], purpose="t")
+    client.chat([{"role": "user", "content": "q"}], purpose="t", thinking=256)
+    client.chat([{"role": "user", "content": "q"}], purpose="t", thinking=True)
+    assert seen[0]["thinking_budget_tokens"] == 0
+    assert seen[1]["thinking_budget_tokens"] == 256
+    assert "thinking_budget_tokens" not in seen[2]
+
+
 def test_no_thinking_fields_when_unsupported(tmp_path):
     transport, seen = fake_server("hi")
     caps = Caps(thinking_toggle=False, thinking_budget_field=None)

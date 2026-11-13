@@ -30,7 +30,8 @@ base_url = "http://127.0.0.1:8080/v1"
 model = "lfm24"
 context = 65536
 mode = "strict"
-caps = { json_schema = true, thinking_toggle = true, thinking_budget_field = "thinking_budget_tokens" }
+# always thinks, even with enable_thinking off; a zero budget turns it off (probed 2026-11-12)
+caps = { json_schema = true, thinking_toggle = true, thinking_budget_field = "thinking_budget_tokens", thinking_off_by_budget = true }
 
 [lfm3]
 base_url = "http://127.0.0.1:8081/v1"

@@ -40,6 +40,8 @@ class Caps:
     thinking_toggle: bool = True
     # Per-request request field that caps thinking tokens (None = not supported).
     thinking_budget_field: str | None = "thinking_budget_tokens"
+    # The model thinks even with enable_thinking off (LFM2.5-24B-A2B): turn it off with a zero budget.
+    thinking_off_by_budget: bool = False
     # Added to every max_tokens, for models that always reason and count it as output (GPT-5).
     reasoning_reserve: int = 0
     # The endpoint's output limit; larger requests are clamped to it (0 = no limit).
@@ -130,6 +132,8 @@ class Client:
             body[self.caps.thinking_budget_field] = int(thinking)
             # Thinking cut short by the budget spills into the answer; leave room for it.
             body["max_tokens"] = self._clamp(max_tokens + int(thinking))
+        elif not thinking and self.caps.thinking_off_by_budget and self.caps.thinking_budget_field:
+            body[self.caps.thinking_budget_field] = 0
 
         if self.caps.max_tokens_field != "max_tokens":
             body[self.caps.max_tokens_field] = body.pop("max_tokens")
